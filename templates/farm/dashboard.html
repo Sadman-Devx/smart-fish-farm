@@ -1,0 +1,441 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Smart Fish Farm{% endblock %}
+{% block content %}
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    {% endfor %}
+{% endif %}
+
+<section class="dashboard-hero mb-4">
+    <div class="dashboard-hero__content">
+        <span class="dashboard-hero__eyebrow">Smart Fish Farm Control Center</span>
+        <h1 class="dashboard-hero__title">Farm Performance Dashboard</h1>
+        <p class="dashboard-hero__subtitle">
+            Monitor growth, weather, feeding efficiency, and alerts from one professional analytics view.
+        </p>
+    </div>
+    <div class="dashboard-hero__actions">
+        <a href="{% url 'farm:daily_feed_report' %}" class="btn btn-light btn-sm fw-semibold">Daily Feed Report</a>
+        <form method="post" action="{% url 'farm:send_test_alert' %}" class="d-inline">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-light btn-sm fw-semibold">Send Test Alert</button>
+        </form>
+        <a href="{% url 'farm:weather_create' %}" class="btn btn-outline-light btn-sm">Log Weather</a>
+        <a href="{% url 'farm:growth_create' %}" class="btn btn-outline-light btn-sm">Log Growth</a>
+    </div>
+</section>
+
+<div class="row g-3 mb-1">
+    <div class="col-md-6 col-xl-3">
+        <div class="kpi-card">
+            <div class="kpi-card__label">Total Ponds</div>
+            <div class="kpi-card__value">{{ total_ponds }}</div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+        <div class="kpi-card">
+            <div class="kpi-card__label">Active Batches</div>
+            <div class="kpi-card__value">{{ total_batches }}</div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+        <div class="kpi-card">
+            <div class="kpi-card__label">Feed (Today)</div>
+            <div class="kpi-card__value">{{ today_feed_given_kg|floatformat:2 }} <small>kg</small></div>
+            <div class="small text-muted mt-1">Actual logged feed</div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+        <div class="kpi-card">
+            <div class="kpi-card__label">Recommended Feed (Today)</div>
+            <div class="kpi-card__value">{{ recommended_feed_today_kg|floatformat:2 }} <small>kg</small></div>
+            <div class="small text-muted mt-1">Based on today's temperature</div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+        <div class="kpi-card">
+            <div class="kpi-card__label">Feed (Last 7 Days)</div>
+            <div class="kpi-card__value">{{ feed_last_7_days_kg|floatformat:2 }} <small>kg</small></div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+        <div class="kpi-card">
+            <div class="kpi-card__label">Daily API Temperature</div>
+            <div class="kpi-card__value">
+                {% if daily_api_temp_c %}
+                    {{ daily_api_temp_c|floatformat:1 }} <small>°C</small>
+                {% else %}
+                    N/A
+                {% endif %}
+            </div>
+            <div class="small text-muted mt-1">
+                {% if daily_api_condition %}
+                    {{ daily_api_date }} • {{ daily_api_location|default:"N/A" }} • {{ daily_api_condition }} • Feed {{ daily_api_feed_percent|floatformat:0 }}%
+                {% else %}
+                    API data unavailable
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mt-2">
+    <div class="col-lg-12">
+        <div class="card shadow-sm dashboard-card">
+            <div class="card-body">
+                <h2 class="h5 fw-semibold mb-3">Daily Feed & Temperature</h2>
+                {% if daily_feed_temp_rows %}
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Date</th>
+                                    <th class="text-end">Feed Given (kg)</th>
+                                    <th class="text-end">Recommended Feed (kg)</th>
+                                    <th class="text-end">Avg Water Temp (°C)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in daily_feed_temp_rows %}
+                                    <tr>
+                                        <td>{{ row.date }}</td>
+                                        <td class="text-end fw-semibold">{{ row.feed_kg|floatformat:2 }}</td>
+                                        <td class="text-end">
+                                            {% if row.recommended_feed_kg is not None %}
+                                                {{ row.recommended_feed_kg|floatformat:2 }}
+                                            {% else %}
+                                                <span class="text-muted">N/A</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-end">
+                                            {% if row.temp_c is not None %}
+                                                {{ row.temp_c|floatformat:1 }}
+                                            {% else %}
+                                                <span class="text-muted">N/A</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted mb-0">No daily feed records available yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="card shadow-sm h-100 dashboard-card">
+            <div class="card-body">
+                <h2 class="h5 fw-semibold mb-3">Ponds</h2>
+                {% if ponds %}
+                <ul class="list-group list-group-flush">
+                    {% for pond in ponds %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <a href="{% url 'farm:pond_detail' pond.pk %}" class="fw-semibold text-decoration-none">
+                            {{ pond.name }}
+                        </a>
+                        <span class="badge text-bg-light">
+                            {{ pond.area_m2 }} m²
+                        </span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted mb-0">No ponds created yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card shadow-sm h-100 dashboard-card">
+            <div class="card-body">
+                <h2 class="h5 fw-semibold mb-3">Active Batches</h2>
+                {% if active_batches %}
+                <div class="list-group list-group-flush">
+                    {% for batch in active_batches %}
+                    <a href="{% url 'farm:batch_detail' batch.pk %}"
+                        class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="fw-semibold">{{ batch }}</div>
+                            <small class="text-muted">
+                                Age: {{ batch.current_age_days }} days
+                            </small>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">No fish batches yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card shadow-sm h-100 dashboard-card">
+            <div class="card-body">
+                <h2 class="h5 fw-semibold mb-3">Today's Reminders</h2>
+                <div class="text-muted small mb-2">Pending: {{ reminders_today }}</div>
+                {% if pending_reminders %}
+                <ul class="list-group list-group-flush">
+                    {% for reminder in pending_reminders %}
+                    <li class="list-group-item">
+                        <div class="fw-semibold">{{ reminder.batch }}</div>
+                        <small class="text-muted">
+                            {{ reminder.scheduled_for|date:"H:i" }} - {{ reminder.message }}
+                        </small>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted mb-0">No reminders for today.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mt-4">
+    <div class="col-lg-12">
+        <div class="card shadow-sm dashboard-card">
+            <div class="card-body">
+                <h2 class="h5 fw-semibold mb-3">Recent Feeding (7 days)</h2>
+                {% if recent_feed %}
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Date</th>
+                                <th>Batch</th>
+                                <th>Feed (kg)</th>
+                                <th>Mode</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in recent_feed %}
+                            <tr>
+                                <td>{{ log.date }}</td>
+                                <td>
+                                    <a href="{% url 'farm:batch_detail' log.batch.pk %}">
+                                        {{ log.batch }}
+                                    </a>
+                                </td>
+                                <td>{{ log.feed_amount_kg }}</td>
+                                <td>
+                                    {% if log.auto_calculated %}
+                                    <span class="badge text-bg-success">Auto</span>
+                                    {% else %}
+                                    <span class="badge text-bg-secondary">Manual</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">No feeding data yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mt-4">
+    <div class="col-lg-4">
+        <div class="card shadow-sm h-100 dashboard-card">
+            <div class="card-body">
+                <h2 class="h5 fw-semibold mb-3">Biomass Growth</h2>
+                <canvas id="biomassChart" height="220"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card shadow-sm h-100 dashboard-card">
+            <div class="card-body">
+                <h2 class="h5 fw-semibold mb-3">Mortality Trends</h2>
+                <canvas id="mortalityChart" height="220"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card shadow-sm h-100 dashboard-card">
+            <div class="card-body">
+                <h2 class="h5 fw-semibold mb-3">Feed Consumption</h2>
+                <canvas id="feedConsumptionChart" height="220"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mt-2">
+    <div class="col-lg-12">
+        <div class="card shadow-sm dashboard-card">
+            <div class="card-body">
+                <h2 class="h5 fw-semibold mb-3">Target vs Actual Feed</h2>
+                <canvas id="targetActualChart" height="120"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card shadow-sm h-100 dashboard-card">
+            <div class="card-body">
+                <h2 class="h5 fw-semibold mb-3">Weather Trend</h2>
+                <canvas id="weatherTrendChart" height="220"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card shadow-sm h-100 dashboard-card">
+            <div class="card-body">
+                <h2 class="h5 fw-semibold mb-3">Feed vs Growth</h2>
+                <canvas id="feedGrowthChart" height="220"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card shadow-sm h-100 dashboard-card">
+            <div class="card-body">
+                <h2 class="h5 fw-semibold mb-3">Temperature vs Appetite</h2>
+                <canvas id="tempAppetiteChart" height="220"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{ biomass_labels|json_script:"biomass-labels" }}
+{{ biomass_values|json_script:"biomass-values" }}
+{{ mortality_labels|json_script:"mortality-labels" }}
+{{ mortality_values|json_script:"mortality-values" }}
+{{ feed_cost_labels|json_script:"feed-cost-labels" }}
+{{ feed_cost_values|json_script:"feed-cost-values" }}
+{{ feed_consumption_values|json_script:"feed-consumption-values" }}
+{{ weather_labels|json_script:"weather-labels" }}
+{{ weather_temp_values|json_script:"weather-temp-values" }}
+{{ feed_growth_points|json_script:"feed-growth-points" }}
+{{ temp_appetite_points|json_script:"temp-appetite-points" }}
+{{ target_actual_labels|json_script:"target-actual-labels" }}
+{{ target_actual_actual_values|json_script:"target-actual-actual-values" }}
+{{ target_actual_target_values|json_script:"target-actual-target-values" }}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const biomassLabels = JSON.parse(document.getElementById("biomass-labels").textContent);
+    const biomassValues = JSON.parse(document.getElementById("biomass-values").textContent);
+    const mortalityLabels = JSON.parse(document.getElementById("mortality-labels").textContent);
+    const mortalityValues = JSON.parse(document.getElementById("mortality-values").textContent);
+    const feedCostLabels = JSON.parse(document.getElementById("feed-cost-labels").textContent);
+    const feedCostValues = JSON.parse(document.getElementById("feed-cost-values").textContent);
+    const feedConsumptionValues = JSON.parse(document.getElementById("feed-consumption-values").textContent);
+    const weatherLabels = JSON.parse(document.getElementById("weather-labels").textContent);
+    const weatherTempValues = JSON.parse(document.getElementById("weather-temp-values").textContent);
+    const feedGrowthPoints = JSON.parse(document.getElementById("feed-growth-points").textContent);
+    const tempAppetitePoints = JSON.parse(document.getElementById("temp-appetite-points").textContent);
+    const targetActualLabels = JSON.parse(document.getElementById("target-actual-labels").textContent);
+    const targetActualActualValues = JSON.parse(document.getElementById("target-actual-actual-values").textContent);
+    const targetActualTargetValues = JSON.parse(document.getElementById("target-actual-target-values").textContent);
+
+    new Chart(document.getElementById("biomassChart"), {
+        type: "bar",
+        data: {
+            labels: biomassLabels,
+            datasets: [{ label: "Biomass (kg)", data: biomassValues, backgroundColor: "rgba(8, 145, 178, 0.72)" }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+    });
+
+    new Chart(document.getElementById("mortalityChart"), {
+        type: "line",
+        data: {
+            labels: mortalityLabels,
+            datasets: [{ label: "Mortality (%)", data: mortalityValues, tension: 0.32, borderColor: "#ef4444" }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+    });
+
+    new Chart(document.getElementById("feedConsumptionChart"), {
+        type: "line",
+        data: {
+            labels: feedCostLabels,
+            datasets: [
+                { label: "Feed (kg)", data: feedConsumptionValues, tension: 0.3, borderColor: "#0ea5e9" },
+                { label: "Feed Cost", data: feedCostValues, tension: 0.3, borderColor: "#10b981" }
+            ]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+    });
+
+    new Chart(document.getElementById("weatherTrendChart"), {
+        type: "line",
+        data: {
+            labels: weatherLabels,
+            datasets: [{ label: "Water Temperature (°C)", data: weatherTempValues, tension: 0.3, borderColor: "#f59e0b" }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+    });
+
+    new Chart(document.getElementById("feedGrowthChart"), {
+        type: "scatter",
+        data: {
+            datasets: [{ label: "Feed vs Avg Weight", data: feedGrowthPoints }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { title: { display: true, text: "Feed (kg)" } },
+                y: { title: { display: true, text: "Avg Weight (g)" } }
+            }
+        }
+    });
+
+    new Chart(document.getElementById("tempAppetiteChart"), {
+        type: "scatter",
+        data: {
+            datasets: [{ label: "Temperature vs Appetite", data: tempAppetitePoints }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { title: { display: true, text: "Temperature (°C)" } },
+                y: { title: { display: true, text: "Appetite (% biomass feed/day)" } }
+            }
+        }
+    });
+
+    new Chart(document.getElementById("targetActualChart"), {
+        type: "line",
+        data: {
+            labels: targetActualLabels,
+            datasets: [
+                {
+                    label: "Actual Feed (kg)",
+                    data: targetActualActualValues,
+                    borderColor: "#0ea5e9",
+                    tension: 0.28
+                },
+                {
+                    label: "Recommended Feed (kg)",
+                    data: targetActualTargetValues,
+                    borderColor: "#f97316",
+                    borderDash: [6, 4],
+                    tension: 0.28
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+</script>
+{% endblock %}

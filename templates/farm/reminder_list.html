@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Feeding Reminders - Smart Fish Farm{% endblock %}
+{% block content %}
+<h1 class="h3 fw-bold mb-3">Feeding Reminders</h1>
+{% if reminders %}
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead class="table-light">
+            <tr>
+                <th>Batch</th>
+                <th>Scheduled For</th>
+                <th>Message</th>
+                <th>Status</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for reminder in reminders %}
+                <tr>
+                    <td>{{ reminder.batch }}</td>
+                    <td>{{ reminder.scheduled_for }}</td>
+                    <td>{{ reminder.message }}</td>
+                    <td>
+                        {% if reminder.sent %}
+                            <span class="badge text-bg-success">Sent</span>
+                        {% else %}
+                            <span class="badge text-bg-warning text-dark">Pending</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% else %}
+    <p class="text-muted">No reminders yet.</p>
+{% endif %}
+{% endblock %}
+

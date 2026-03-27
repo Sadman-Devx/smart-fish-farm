@@ -1,0 +1,101 @@
+body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #f5f8fc 0%, #f7fafc 100%);
+}
+
+.card {
+    border-radius: 1rem;
+    border: 1px solid #e8edf4;
+}
+
+.card-body {
+    padding: 1.25rem 1.5rem;
+}
+
+.navbar-brand {
+    letter-spacing: 0.04em;
+}
+
+table.table-sm td,
+table.table-sm th {
+    padding-top: 0.35rem;
+    padding-bottom: 0.35rem;
+}
+
+.dashboard-hero {
+    background: linear-gradient(120deg, #0f4c81 0%, #0c6ca8 52%, #0ea5a4 100%);
+    color: #fff;
+    border-radius: 1rem;
+    padding: 1.4rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: flex-start;
+}
+
+.dashboard-hero__eyebrow {
+    font-size: 0.72rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    opacity: 0.88;
+}
+
+.dashboard-hero__title {
+    font-size: 1.55rem;
+    line-height: 1.2;
+    font-weight: 700;
+    margin: 0.35rem 0 0.4rem;
+}
+
+.dashboard-hero__subtitle {
+    margin: 0;
+    opacity: 0.94;
+    max-width: 42rem;
+}
+
+.dashboard-hero__actions {
+    display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.kpi-card {
+    background: #fff;
+    border: 1px solid #e6edf5;
+    border-radius: 0.9rem;
+    padding: 0.95rem 1rem;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+}
+
+.kpi-card__label {
+    font-size: 0.78rem;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.kpi-card__value {
+    margin-top: 0.15rem;
+    font-size: 1.45rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.kpi-card__value small {
+    font-size: 0.84rem;
+    color: #475569;
+}
+
+.dashboard-card {
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06) !important;
+}
+
+@media (max-width: 991px) {
+    .dashboard-hero {
+        flex-direction: column;
+    }
+    .dashboard-hero__actions {
+        justify-content: flex-start;
+    }
+}

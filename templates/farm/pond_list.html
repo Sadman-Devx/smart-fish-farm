@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Ponds - Smart Fish Farm{% endblock %}
+{% block content %}
+<h1 class="h3 fw-bold mb-3">Ponds</h1>
+{% if ponds %}
+    <div class="row g-3">
+        {% for pond in ponds %}
+            <div class="col-md-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <h2 class="h5 fw-semibold">
+                            <a href="{% url 'farm:pond_detail' pond.pk %}" class="text-decoration-none">
+                                {{ pond.name }}
+                            </a>
+                        </h2>
+                        <p class="mb-1 text-muted">Area: {{ pond.area_m2 }} m²</p>
+                        <p class="mb-0 text-muted">Depth: {{ pond.max_depth_m }} m</p>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <p class="text-muted">No ponds have been created yet.</p>
+{% endif %}
+{% endblock %}
+

@@ -1,0 +1,59 @@
+## Smart Fish Farm Management System (Advanced)
+
+This is a Django-based Smart Fish Farm Management System that helps you:
+
+- Track ponds and fish batches
+- Log fish growth over time
+- Log water/weather conditions per pond
+- Automatically calculate daily feed based on biomass and temperature bands
+- Generate feeding logs and basic reminders
+- View an analytics-style dashboard with recent activity
+
+### 1. Setup
+
+```bash
+cd "d:\Smart Fish Farm"
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+### 2. Database & Admin
+
+```bash
+python manage.py migrate
+python manage.py createsuperuser
+```
+
+Run the development server:
+
+```bash
+python manage.py runserver
+```
+
+Open `http://127.0.0.1:8000/` for the dashboard and `http://127.0.0.1:8000/admin/` for the admin.
+
+### 3. Core Concepts
+
+- **Ponds**: basic pond metadata (area, depth).
+- **Fish Batches**: species, stocking date, counts, starting weights.
+- **Growth Records**: periodic samples of average weight and survival.
+- **Weather Records**: per-pond measurements (temperature, DO, pH, rainfall).
+- **Feeding Profiles**: map a temperature range to a feeding rate (% of biomass).
+- **Feed Logs**: daily feed amounts (auto or manual).
+- **Feeding Reminders**: scheduled notifications for future feeding times.
+
+To enable automatic feed calculation, create `FeedingProfile` entries in the Django admin that define temperature bands and feeding % of biomass. When you open a batch page, the system uses:
+
+1. Latest growth record to estimate biomass.
+2. Latest pond water temperature.
+3. Matching feeding profile for that temperature.
+
+This produces a suggested feed amount in kg, which is pre-filled in the feeding form.
+
+### 4. Extending
+
+- Hook reminders into email/SMS by adding a periodic job that scans `FeedingReminder` objects and sends notifications.
+- Add charts (e.g. with Chart.js) to plot growth and FCR over time.
+- Integrate with an external weather or sensor API to auto-create `WeatherRecord` entries.
+
