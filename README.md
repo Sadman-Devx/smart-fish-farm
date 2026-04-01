@@ -37,18 +37,11 @@ GRANT ALL PRIVILEGES ON DATABASE smart_fish_farm TO myuser;
 Then set these in `.env`:
 
 ```bash
-DB_ENGINE=postgresql
 DB_NAME=smart_fish_farm
 DB_USER=myuser
 DB_PASSWORD=your_postgres_password
 DB_HOST=localhost
 DB_PORT=5432
-```
-
-If PostgreSQL is not installed, use SQLite by setting:
-
-```bash
-DB_ENGINE=sqlite
 ```
 
 ### 3. Database & Admin

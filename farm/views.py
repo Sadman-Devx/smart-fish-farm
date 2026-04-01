@@ -132,11 +132,30 @@ def dashboard(request):
     )
     # Recommended feed for today based on today's temperature (DailyWeather)
     recommended_feed_today_kg = 0.0
+    recommended_feed_sources = set()
     for batch in active_batches:
         suggested = smart_feed_kg_for_batch(batch, day=today)
         if suggested is not None:
             recommended_feed_today_kg += float(suggested)
+            has_pond_weather = (
+                WeatherRecord.objects.filter(pond=batch.pond).order_by("-timestamp").first()
+                is not None
+            )
+            if has_pond_weather:
+                recommended_feed_sources.add("pond")
+            elif daily_api_weather is not None:
+                recommended_feed_sources.add("api")
+            else:
+                recommended_feed_sources.add("unknown")
     recommended_feed_today_kg = round(recommended_feed_today_kg, 2)
+    if recommended_feed_sources == {"pond"}:
+        recommended_feed_source_label = "Pond weather"
+    elif recommended_feed_sources == {"api"}:
+        recommended_feed_source_label = "API weather"
+    elif recommended_feed_sources:
+        recommended_feed_source_label = "Mixed sources"
+    else:
+        recommended_feed_source_label = "No recommendation"
 
     # Daily operation summary: total feed per day + average water temperature per day
     feed_daily = list(
@@ -190,6 +209,7 @@ def dashboard(request):
         "feed_last_7_days_kg": feed_last_7_days_kg,
         "today_feed_given_kg": today_feed_given_kg,
         "recommended_feed_today_kg": recommended_feed_today_kg,
+        "recommended_feed_source_label": recommended_feed_source_label,
         "avg_recent_temp_c": avg_recent_temp_c,
         "daily_api_temp_c": daily_api_weather.temperature_c if daily_api_weather else None,
         "daily_api_condition": daily_api_weather.condition if daily_api_weather else None,

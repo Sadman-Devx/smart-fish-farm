@@ -53,7 +53,7 @@
         <div class="kpi-card">
             <div class="kpi-card__label">Recommended Feed (Today)</div>
             <div class="kpi-card__value">{{ recommended_feed_today_kg|floatformat:2 }} <small>kg</small></div>
-            <div class="small text-muted mt-1">Based on today's temperature</div>
+            <div class="small text-muted mt-1">Source: {{ recommended_feed_source_label }}</div>
         </div>
     </div>
     <div class="col-md-6 col-xl-3">
