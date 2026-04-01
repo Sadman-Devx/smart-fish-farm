@@ -12,13 +12,46 @@ This is a Django-based Smart Fish Farm Management System that helps you:
 ### 1. Setup
 
 ```bash
-cd "d:\Smart Fish Farm"
-python -m venv .venv
-.venv\Scripts\activate
+cd "F:\sakib\smart-fish-farm"
+py -m venv .venv
+. .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
-### 2. Database & Admin
+Copy environment template and edit values:
+
+```bash
+copy .env.example .env
+```
+
+### 2. PostgreSQL setup (recommended)
+
+Create DB user and database in `psql`:
+
+```sql
+CREATE USER myuser WITH PASSWORD 'your_postgres_password';
+CREATE DATABASE smart_fish_farm OWNER myuser;
+GRANT ALL PRIVILEGES ON DATABASE smart_fish_farm TO myuser;
+```
+
+Then set these in `.env`:
+
+```bash
+DB_ENGINE=postgresql
+DB_NAME=smart_fish_farm
+DB_USER=myuser
+DB_PASSWORD=your_postgres_password
+DB_HOST=localhost
+DB_PORT=5432
+```
+
+If PostgreSQL is not installed, use SQLite by setting:
+
+```bash
+DB_ENGINE=sqlite
+```
+
+### 3. Database & Admin
 
 ```bash
 python manage.py migrate
@@ -33,7 +66,7 @@ python manage.py runserver
 
 Open `http://127.0.0.1:8000/` for the dashboard and `http://127.0.0.1:8000/admin/` for the admin.
 
-### 3. Core Concepts
+### 4. Core Concepts
 
 - **Ponds**: basic pond metadata (area, depth).
 - **Fish Batches**: species, stocking date, counts, starting weights.
@@ -51,7 +84,7 @@ To enable automatic feed calculation, create `FeedingProfile` entries in the Dja
 
 This produces a suggested feed amount in kg, which is pre-filled in the feeding form.
 
-### 4. Extending
+### 5. Extending
 
 - Hook reminders into email/SMS by adding a periodic job that scans `FeedingReminder` objects and sends notifications.
 - Add charts (e.g. with Chart.js) to plot growth and FCR over time.
