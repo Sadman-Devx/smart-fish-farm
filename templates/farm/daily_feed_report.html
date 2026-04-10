@@ -1,63 +1,74 @@
 {% extends "base.html" %}
-{% block title %}Daily Feed Report - Smart Fish Farm{% endblock %}
+{% block title %}Daily Feed Report{% endblock %}
+{% block nav_report %}active{% endblock %}
+{% block topbar_title %}Daily Feed Report{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{% url 'farm:dashboard' %}" class="btn btn-sm">← Dashboard</a>
+{% endblock %}
+
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-        <h1 class="h3 fw-bold mb-1">Daily Feed Report</h1>
-        <p class="text-muted mb-0">Suggested feed per batch for {{ today }}</p>
-    </div>
-    <a href="{% url 'farm:dashboard' %}" class="btn btn-outline-secondary btn-sm">Back to dashboard</a>
+<div class="page-header mb-16">
+  <div>
+    <h1>Daily Feed Report</h1>
+    <p>Suggested feed per batch for {{ today }}</p>
+  </div>
+  <div class="d-flex align-center gap-8">
+    <span class="pill pill-info">{{ today }}</span>
+  </div>
 </div>
 
 {% if rows %}
-    <div class="card shadow-sm">
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <thead class="table-light">
-                    <tr>
-                        <th>Pond</th>
-                        <th>Species / Batch</th>
-                        <th class="text-end">Biomass (kg)</th>
-                        <th class="text-end">Water Temp (°C)</th>
-                        <th class="text-end">Feed (kg)</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {% for row in rows %}
-                        <tr>
-                            <td>{{ row.pond.name }}</td>
-                            <td>
-                                <a href="{% url 'farm:batch_detail' row.batch.pk %}">
-                                    {{ row.batch.get_species_display }} batch
-                                </a>
-                            </td>
-                            <td class="text-end">
-                                {{ row.biomass_kg|floatformat:1 }}
-                            </td>
-                            <td class="text-end">
-                                {% if row.temperature %}
-                                    {{ row.temperature|floatformat:1 }}
-                                {% else %}
-                                    <span class="text-muted">–</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-end">
-                                {% if row.suggested_feed_kg %}
-                                    {{ row.suggested_feed_kg|floatformat:2 }}
-                                {% else %}
-                                    <span class="text-muted">N/A</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
+<div class="card">
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Pond</th>
+          <th>Species / Batch</th>
+          <th class="text-end">Biomass (kg)</th>
+          <th class="text-end">Water Temp (°C)</th>
+          <th class="text-end">Suggested Feed (kg)</th>
+          <th class="text-end">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td class="fw-bold">{{ row.pond.name }}</td>
+          <td>
+            <a href="{% url 'farm:batch_detail' row.batch.pk %}" style="color:var(--accent2)">
+              {{ row.batch.get_species_display }} batch
+            </a>
+          </td>
+          <td class="text-end">{{ row.biomass_kg|floatformat:1 }}</td>
+          <td class="text-end">
+            {% if row.temperature %}{{ row.temperature|floatformat:1 }}{% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td class="text-end fw-bold" style="color:var(--accent)">
+            {% if row.suggested_feed_kg %}{{ row.suggested_feed_kg|floatformat:2 }}{% else %}<span class="text-muted">N/A</span>{% endif %}
+          </td>
+          <td class="text-end">
+            {% if row.suggested_feed_kg %}
+              <span class="badge badge-success">Ready</span>
+            {% else %}
+              <span class="badge badge-warn">No profile</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card-footer">
+    Feed amounts are calculated from biomass × feeding profile rate × temperature factor.
+    Set up <a href="/admin/farm/feedingprofile/" style="color:var(--accent2)">Feeding Profiles</a> in the admin to enable auto-calculation.
+  </div>
+</div>
 {% else %}
-    <p class="text-muted">No batches available to generate a report.</p>
+<div class="card card-body" style="text-align:center;padding:48px">
+  <div style="font-size:36px;margin-bottom:12px">🐟</div>
+  <p class="text-muted fs-sm">No batches available to generate a report.</p>
+</div>
 {% endif %}
 {% endblock %}
-

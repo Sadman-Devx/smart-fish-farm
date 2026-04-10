@@ -1,27 +1,53 @@
 {% extends "base.html" %}
-{% block title %}Ponds - Smart Fish Farm{% endblock %}
-{% block content %}
-<h1 class="h3 fw-bold mb-3">Ponds</h1>
-{% if ponds %}
-    <div class="row g-3">
-        {% for pond in ponds %}
-            <div class="col-md-4">
-                <div class="card shadow-sm h-100">
-                    <div class="card-body">
-                        <h2 class="h5 fw-semibold">
-                            <a href="{% url 'farm:pond_detail' pond.pk %}" class="text-decoration-none">
-                                {{ pond.name }}
-                            </a>
-                        </h2>
-                        <p class="mb-1 text-muted">Area: {{ pond.area_m2 }} m²</p>
-                        <p class="mb-0 text-muted">Depth: {{ pond.max_depth_m }} m</p>
-                    </div>
-                </div>
-            </div>
-        {% endfor %}
-    </div>
-{% else %}
-    <p class="text-muted">No ponds have been created yet.</p>
-{% endif %}
+{% block title %}Ponds{% endblock %}
+{% block nav_ponds %}active{% endblock %}
+{% block topbar_title %}Ponds{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{% url 'farm:dashboard' %}" class="btn btn-sm">← Dashboard</a>
 {% endblock %}
 
+{% block content %}
+<div class="page-header mb-16">
+  <div>
+    <h1>Ponds</h1>
+    <p>All active pond zones in your farm</p>
+  </div>
+</div>
+
+<div class="row-3">
+  {% for pond in ponds %}
+  <a href="{% url 'farm:pond_detail' pond.pk %}" class="card"
+     style="text-decoration:none;color:inherit;transition:border-color .2s,background .2s"
+     onmouseover="this.style.borderColor='var(--accent)';this.style.background='var(--surface2)'"
+     onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface)'">
+    <div class="card-body">
+      <div class="d-flex align-center justify-between mb-12">
+        <span style="font-size:28px">🏞</span>
+        <span class="badge badge-accent">{{ pond.area_m2|floatformat:0 }} m²</span>
+      </div>
+      <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;margin-bottom:6px">
+        {{ pond.name }}
+      </div>
+      <div class="detail-grid" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
+        <div class="detail-item" style="padding:8px 10px">
+          <div class="detail-label">Area</div>
+          <div class="detail-value" style="font-size:15px">{{ pond.area_m2 }} m²</div>
+        </div>
+        <div class="detail-item" style="padding:8px 10px">
+          <div class="detail-label">Depth</div>
+          <div class="detail-value" style="font-size:15px">{{ pond.max_depth_m }} m</div>
+        </div>
+      </div>
+      <div class="fs-xs text-muted mt-8">Created {{ pond.created_at|date:"M d, Y" }}</div>
+    </div>
+  </a>
+  {% empty %}
+  <div style="grid-column:1/-1">
+    <div class="card card-body text-muted fs-sm" style="padding:32px;text-align:center">
+      No ponds created yet. Add them via the admin panel.
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -1,38 +1,59 @@
 {% extends "base.html" %}
-{% block title %}Feeding Reminders - Smart Fish Farm{% endblock %}
-{% block content %}
-<h1 class="h3 fw-bold mb-3">Feeding Reminders</h1>
-{% if reminders %}
-    <div class="table-responsive">
-        <table class="table table-sm align-middle">
-            <thead class="table-light">
-            <tr>
-                <th>Batch</th>
-                <th>Scheduled For</th>
-                <th>Message</th>
-                <th>Status</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for reminder in reminders %}
-                <tr>
-                    <td>{{ reminder.batch }}</td>
-                    <td>{{ reminder.scheduled_for }}</td>
-                    <td>{{ reminder.message }}</td>
-                    <td>
-                        {% if reminder.sent %}
-                            <span class="badge text-bg-success">Sent</span>
-                        {% else %}
-                            <span class="badge text-bg-warning text-dark">Pending</span>
-                        {% endif %}
-                    </td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
-{% else %}
-    <p class="text-muted">No reminders yet.</p>
-{% endif %}
+{% block title %}Reminders{% endblock %}
+{% block nav_reminders %}active{% endblock %}
+{% block topbar_title %}Feeding Reminders{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{% url 'farm:dashboard' %}" class="btn btn-sm">← Dashboard</a>
 {% endblock %}
 
+{% block content %}
+<div class="page-header mb-16">
+  <div>
+    <h1>Feeding Reminders</h1>
+    <p>Scheduled alerts for all batches</p>
+  </div>
+</div>
+
+<div class="card">
+  {% if reminders %}
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Batch</th>
+          <th>Scheduled For</th>
+          <th>Message</th>
+          <th class="text-end">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for reminder in reminders %}
+        <tr>
+          <td>
+            <a href="{% url 'farm:batch_detail' reminder.batch.pk %}" style="color:var(--accent2)">
+              {{ reminder.batch }}
+            </a>
+          </td>
+          <td class="text-muted fs-sm">{{ reminder.scheduled_for|date:"M d, Y · H:i" }}</td>
+          <td class="fs-sm">{{ reminder.message }}</td>
+          <td class="text-end">
+            {% if reminder.sent %}
+              <span class="badge badge-success">Sent</span>
+            {% else %}
+              <span class="badge badge-warn">Pending</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card-body" style="text-align:center;padding:40px">
+    <div style="font-size:36px;margin-bottom:12px">🔔</div>
+    <p class="text-muted fs-sm">No reminders yet. They're created automatically when you log a feeding.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

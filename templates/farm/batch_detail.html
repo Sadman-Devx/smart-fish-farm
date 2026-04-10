@@ -1,179 +1,222 @@
 {% extends "base.html" %}
-{% block title %}Batch - Smart Fish Farm{% endblock %}
-{% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-        <h1 class="h3 fw-bold mb-1">{{ batch }}</h1>
-        <p class="text-muted mb-0">
-            Pond {{ batch.pond.name }} • Stocked {{ batch.stocking_date }} • Age {{ batch.current_age_days }} days
-        </p>
-    </div>
-    <a href="{% url 'farm:pond_detail' batch.pond.pk %}" class="btn btn-outline-secondary btn-sm">Back to pond</a>
-</div>
+{% block title %}{{ batch }}{% endblock %}
+{% block topbar_title %}Batch Detail{% endblock %}
 
-<div class="row g-4 mb-4">
-    <div class="col-lg-4">
-        <div class="card shadow-sm h-100">
-            <div class="card-body">
-                <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">Latest Weather</h2>
-                {% if latest_weather %}
-                    <p class="mb-1"><span class="fw-semibold">Temp:</span> {{ latest_weather.water_temp_c }} °C</p>
-                    <p class="mb-1"><span class="fw-semibold">DO:</span> {{ latest_weather.dissolved_oxygen_mg_l }} mg/L</p>
-                    <p class="mb-1"><span class="fw-semibold">pH:</span> {{ latest_weather.ph }}</p>
-                {% else %}
-                    <p class="text-muted mb-0">No weather data yet.</p>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-    <div class="col-lg-4">
-        <div class="card shadow-sm h-100">
-            <div class="card-body">
-                <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">Feeding Recommendation</h2>
-                {% if auto_feed_kg %}
-                    <p class="mb-1">
-                        Suggested feed today:
-                        <span class="fw-bold">{{ auto_feed_kg|floatformat:2 }} kg</span>
-                    </p>
-                    <p class="mb-1">
-                        Projected weight gain (FCR {{ assumed_fcr|floatformat:2 }}):
-                        <span class="fw-semibold">{{ projected_gain_kg|floatformat:2 }} kg</span>
-                    </p>
-                    <p class="mb-1">
-                        Projected next avg weight:
-                        <span class="fw-semibold">{{ projected_next_avg_weight_g|floatformat:2 }} g/fish</span>
-                    </p>
-                    <p class="text-muted mb-0">
-                        Based on biomass, feed rate, and temperature factor.
-                    </p>
-                {% else %}
-                    <p class="text-muted mb-0">
-                        Add growth and weather records to unlock automatic feed calculation.
-                    </p>
-                {% endif %}
-                {% if ai_prediction %}
-                    <hr>
-                    <h3 class="h6 fw-semibold text-uppercase text-muted mb-2">AI Growth Prediction</h3>
-                    <p class="mb-1">
-                        Predicted daily gain:
-                        <span class="fw-semibold">{{ ai_prediction.predicted_daily_gain_g|floatformat:2 }} g/fish/day</span>
-                    </p>
-                    <p class="mb-1">
-                        Next avg weight estimate:
-                        <span class="fw-semibold">{{ ai_prediction.predicted_next_avg_weight_g|floatformat:2 }} g/fish</span>
-                    </p>
-                    <p class="mb-1">
-                        Market target:
-                        <span class="fw-semibold">{{ ai_prediction.target_market_weight_g|floatformat:0 }} g</span>
-                    </p>
-                    <p class="mb-1">
-                        Est. harvest date:
-                        <span class="fw-semibold">{{ ai_prediction.estimated_harvest_date }}</span>
-                        ({{ ai_prediction.estimated_days_to_market }} days)
-                    </p>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-    <div class="col-lg-4">
-        <div class="card shadow-sm h-100">
-            <div class="card-body">
-                <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">Log Today's Feeding</h2>
-                <form method="post" class="row g-2">
-                    {% csrf_token %}
-                    {{ feed_form.non_field_errors }}
-                    {% for field in feed_form %}
-                        <div class="col-12">
-                            <label class="form-label small fw-semibold">{{ field.label }}</label>
-                            {{ field }}
-                            {% if field.help_text %}
-                                <div class="form-text">{{ field.help_text }}</div>
-                            {% endif %}
-                            {% for error in field.errors %}
-                                <div class="text-danger small">{{ error }}</div>
-                            {% endfor %}
-                        </div>
-                    {% endfor %}
-                    <div class="col-12 mt-2">
-                        <button type="submit" class="btn btn-primary btn-sm w-100">
-                            Save Feeding Log
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row g-4">
-    <div class="col-lg-6">
-        <div class="card shadow-sm">
-            <div class="card-body">
-                <h2 class="h5 fw-semibold mb-3">Growth Records</h2>
-                {% if growth_records %}
-                    <div class="table-responsive">
-                        <table class="table table-sm mb-0 align-middle">
-                            <thead class="table-light">
-                            <tr>
-                                <th>Date</th>
-                                <th>Surviving Count</th>
-                                <th>Avg Weight (g)</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            {% for gr in growth_records %}
-                                <tr>
-                                    <td>{{ gr.date }}</td>
-                                    <td>{{ gr.surviving_count }}</td>
-                                    <td>{{ gr.avg_weight_g }}</td>
-                                </tr>
-                            {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                {% else %}
-                    <p class="text-muted mb-0">No growth records yet.</p>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-    <div class="col-lg-6">
-        <div class="card shadow-sm">
-            <div class="card-body">
-                <h2 class="h5 fw-semibold mb-3">Feeding History</h2>
-                {% if feed_logs %}
-                    <div class="table-responsive">
-                        <table class="table table-sm mb-0 align-middle">
-                            <thead class="table-light">
-                            <tr>
-                                <th>Date</th>
-                                <th>Feed (kg)</th>
-                                <th>Mode</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            {% for log in feed_logs %}
-                                <tr>
-                                    <td>{{ log.date }}</td>
-                                    <td>{{ log.feed_amount_kg }}</td>
-                                    <td>
-                                        {% if log.auto_calculated %}
-                                            <span class="badge text-bg-success">Auto</span>
-                                        {% else %}
-                                            <span class="badge text-bg-secondary">Manual</span>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                            {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                {% else %}
-                    <p class="text-muted mb-0">No feeding records yet.</p>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-</div>
+{% block topbar_actions %}
+  <a href="{% url 'farm:pond_detail' batch.pond.pk %}" class="btn btn-sm">← {{ batch.pond.name }}</a>
+  <a href="{% url 'farm:weather_create' %}" class="btn btn-sm">+ Weather</a>
+  <a href="{% url 'farm:growth_create' %}" class="btn btn-sm">+ Growth</a>
 {% endblock %}
 
+{% block content %}
+<div class="page-header mb-16">
+  <div>
+    <h1>{{ batch }}</h1>
+    <p>{{ batch.pond.name }} · Stocked {{ batch.stocking_date }} · Age {{ batch.current_age_days }} days</p>
+  </div>
+</div>
+
+{# ── Alerts ──────────────────────────────────────────────── #}
+{% if not auto_feed_kg %}
+<div class="alert-strip alert-strip-info">
+  ℹ Add growth records and weather data to unlock automatic feed calculation.
+</div>
+{% endif %}
+{% if ai_prediction and ai_prediction.estimated_days_to_market <= 7 %}
+<div class="alert-strip alert-strip-danger">
+  ⚠ Harvest target in <strong>{{ ai_prediction.estimated_days_to_market }} days</strong> (est. {{ ai_prediction.estimated_harvest_date }}).
+  Plan harvest logistics now.
+</div>
+{% endif %}
+
+{# ── Top stat row ─────────────────────────────────────────── #}
+<div class="kpi-grid">
+  <div class="kpi-card k-teal">
+    <div class="kpi-label">Biomass</div>
+    <div class="kpi-value">{{ batch.latest_biomass_kg|floatformat:2 }} <small>kg</small></div>
+    <div class="kpi-meta">Current total</div>
+  </div>
+  <div class="kpi-card k-blue">
+    <div class="kpi-label">Age</div>
+    <div class="kpi-value">{{ batch.current_age_days }} <small>days</small></div>
+    <div class="kpi-meta">Since {{ batch.stocking_date }}</div>
+  </div>
+  {% if auto_feed_kg %}
+  <div class="kpi-card k-orange">
+    <div class="kpi-label">Suggested Feed Today</div>
+    <div class="kpi-value">{{ auto_feed_kg|floatformat:2 }} <small>kg</small></div>
+    <div class="kpi-meta">FCR {{ assumed_fcr|floatformat:2 }}</div>
+  </div>
+  {% endif %}
+  {% if ai_prediction %}
+  <div class="kpi-card k-success">
+    <div class="kpi-label">Daily Gain</div>
+    <div class="kpi-value">{{ ai_prediction.predicted_daily_gain_g|floatformat:2 }} <small>g/fish</small></div>
+    <div class="kpi-meta">AI prediction</div>
+  </div>
+  <div class="kpi-card {% if ai_prediction.estimated_days_to_market <= 7 %}k-warn{% else %}k-purple{% endif %}">
+    <div class="kpi-label">Days to Harvest</div>
+    <div class="kpi-value">{{ ai_prediction.estimated_days_to_market }} <small>days</small></div>
+    <div class="kpi-meta">Est. {{ ai_prediction.estimated_harvest_date }}</div>
+  </div>
+  {% endif %}
+  {% if latest_weather %}
+  <div class="kpi-card k-blue">
+    <div class="kpi-label">Water Temp</div>
+    <div class="kpi-value">{{ latest_weather.water_temp_c }} <small>°C</small></div>
+    <div class="kpi-meta">DO {{ latest_weather.dissolved_oxygen_mg_l }} mg/L · pH {{ latest_weather.ph }}</div>
+  </div>
+  {% endif %}
+</div>
+
+{# ── Feed form + AI prediction ────────────────────────────── #}
+<div class="row-2">
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Log Today's Feeding</span>
+      {% if today_feed_log %}<span class="badge badge-success">✓ Logged today</span>{% endif %}
+    </div>
+    <div class="card-body">
+      <form method="post" style="display:flex;flex-direction:column;gap:12px">
+        {% csrf_token %}
+        {{ feed_form.non_field_errors }}
+        {% for field in feed_form %}
+          <div>
+            <label class="form-label">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+            {% for error in field.errors %}<div class="fs-xs text-danger" style="margin-top:4px">{{ error }}</div>{% endfor %}
+          </div>
+        {% endfor %}
+        <button type="submit" class="btn btn-accent" style="margin-top:4px">Save Feeding Log</button>
+      </form>
+    </div>
+  </div>
+
+  {% if ai_prediction %}
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">AI Growth Prediction</span>
+      <span class="pill pill-info">Model output</span>
+    </div>
+    <div class="card-body">
+      <div class="detail-grid" style="grid-template-columns:1fr 1fr;gap:10px">
+        <div class="detail-item">
+          <div class="detail-label">Current Avg Weight</div>
+          <div class="detail-value" style="font-size:16px">{{ ai_prediction.current_avg_weight_g|floatformat:1 }}g</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Next Avg Weight</div>
+          <div class="detail-value" style="font-size:16px;color:var(--accent)">{{ ai_prediction.predicted_next_avg_weight_g|floatformat:1 }}g</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Daily Gain</div>
+          <div class="detail-value" style="font-size:16px">{{ ai_prediction.predicted_daily_gain_g|floatformat:2 }}g</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Effective FCR</div>
+          <div class="detail-value" style="font-size:16px">{{ ai_prediction.effective_fcr|floatformat:2 }}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Market Target</div>
+          <div class="detail-value" style="font-size:16px">{{ ai_prediction.target_market_weight_g|floatformat:0 }}g</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Est. Harvest</div>
+          <div class="detail-value" style="font-size:14px;color:{% if ai_prediction.estimated_days_to_market <= 7 %}var(--danger){% else %}var(--success){% endif %}">
+            {{ ai_prediction.estimated_harvest_date }}<br>
+            <span style="font-size:12px;font-family:'Space Grotesk',sans-serif;font-weight:400">
+              {{ ai_prediction.estimated_days_to_market }} days
+            </span>
+          </div>
+        </div>
+      </div>
+      {% if auto_feed_kg %}
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+        <div class="sensor-row" style="padding:6px 0">
+          <span class="sensor-label">Projected weight gain</span>
+          <span class="sensor-val text-accent">{{ projected_gain_kg|floatformat:2 }} kg</span>
+        </div>
+        <div class="sensor-row" style="padding:6px 0">
+          <span class="sensor-label">Projected next avg weight</span>
+          <span class="sensor-val text-accent">{{ projected_next_avg_weight_g|floatformat:2 }} g/fish</span>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+{# ── Growth records + Feed history ────────────────────────── #}
+<div class="row-2">
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Growth Records</span>
+      <a href="{% url 'farm:growth_create' %}" class="btn btn-sm">+ Add</a>
+    </div>
+    {% if growth_records %}
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th class="text-end">Count</th>
+            <th class="text-end">Avg Weight (g)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for gr in growth_records %}
+          <tr>
+            <td class="text-muted fs-sm">{{ gr.date }}</td>
+            <td class="text-end">{{ gr.surviving_count }}</td>
+            <td class="text-end fw-bold" style="color:var(--accent)">{{ gr.avg_weight_g }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="card-body"><p class="text-muted fs-sm">No growth records yet.</p></div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Feeding History</span>
+    </div>
+    {% if feed_logs %}
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th class="text-end">Feed (kg)</th>
+            <th class="text-end">Mode</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in feed_logs %}
+          <tr>
+            <td class="text-muted fs-sm">{{ log.date }}</td>
+            <td class="text-end fw-bold">{{ log.feed_amount_kg }}</td>
+            <td class="text-end">
+              {% if log.auto_calculated %}
+                <span class="badge badge-success">Auto</span>
+              {% else %}
+                <span class="badge badge-secondary">Manual</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="card-body"><p class="text-muted fs-sm">No feeding records yet.</p></div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -2,32 +2,129 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>{% block title %}Smart Fish Farm{% endblock %}</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <meta charset="UTF-8">
+  <title>{% block title %}AquaSmart{% endblock %} — Smart Fish Farm</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  {% block extra_head %}{% endblock %}
 </head>
-<body class="bg-light">
-<nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
-    <div class="container-fluid">
-        <a class="navbar-brand fw-bold" href="{% url 'farm:dashboard' %}">Smart Fish Farm</a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
-                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav me-auto">
-                <li class="nav-item"><a class="nav-link" href="{% url 'farm:pond_list' %}">Ponds</a></li>
-                <li class="nav-item"><a class="nav-link" href="{% url 'farm:reminder_list' %}">Reminders</a></li>
-            </ul>
-        </div>
+<body>
+
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<div class="shell">
+
+  <!-- ── Sidebar ─────────────────────────────────────── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-mark">🐟</div>
+      <div class="logo-name">AquaSmart</div>
+      <div class="logo-sub">Fish Farm Management</div>
     </div>
-</nav>
-<main class="container mb-5">
-    {% block content %}{% endblock %}
-</main>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section">Overview</div>
+      <a href="{% url 'farm:dashboard' %}"
+         class="nav-item {% block nav_dashboard %}{% endblock %}">
+        <span class="nav-icon">⬡</span> Dashboard
+      </a>
+
+      <div class="nav-section">Farm</div>
+      <a href="{% url 'farm:pond_list' %}"
+         class="nav-item {% block nav_ponds %}{% endblock %}">
+        <span class="nav-icon">◯</span> Ponds
+      </a>
+      <a href="{% url 'farm:weather_create' %}"
+         class="nav-item {% block nav_weather %}{% endblock %}">
+        <span class="nav-icon">🌡</span> Log Weather
+      </a>
+      <a href="{% url 'farm:growth_create' %}"
+         class="nav-item {% block nav_growth %}{% endblock %}">
+        <span class="nav-icon">📈</span> Log Growth
+      </a>
+      <a href="{% url 'farm:feed_log_create' %}"
+         class="nav-item {% block nav_feed %}{% endblock %}">
+        <span class="nav-icon">🪣</span> Log Feed
+      </a>
+
+      <div class="nav-section">Reports</div>
+      <a href="{% url 'farm:daily_feed_report' %}"
+         class="nav-item {% block nav_report %}{% endblock %}">
+        <span class="nav-icon">◫</span> Daily Feed Report
+      </a>
+      <a href="{% url 'farm:reminder_list' %}"
+         class="nav-item {% block nav_reminders %}{% endblock %}">
+        <span class="nav-icon">🔔</span> Reminders
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="user-row">
+        <div class="user-avatar">FM</div>
+        <div>
+          <div class="user-name">Farm Manager</div>
+          <div class="user-role">Chandpur, BD</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main ────────────────────────────────────────── -->
+  <div class="main">
+    <!-- Topbar -->
+    <div class="topbar">
+      <div class="d-flex align-center gap-12">
+        <button class="hamburger" id="hamburgerBtn">☰</button>
+        <div>
+          <span class="topbar-title">{% block topbar_title %}Dashboard{% endblock %}</span>
+        </div>
+        <span class="d-flex align-center gap-8 fs-xs text-muted" style="margin-left:4px">
+          <span class="indicator"></span> Live
+        </span>
+      </div>
+      <div class="topbar-actions">
+        {% block topbar_actions %}
+          <a href="{% url 'farm:daily_feed_report' %}" class="btn btn-sm">Daily Report</a>
+          <a href="{% url 'farm:weather_create' %}" class="btn btn-sm">+ Weather</a>
+          <a href="{% url 'farm:growth_create' %}" class="btn btn-sm">+ Growth</a>
+          <a href="{% url 'farm:feed_log_create' %}" class="btn btn-accent btn-sm">+ Feed Log</a>
+        {% endblock %}
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+      {% if messages %}
+        <div class="messages-wrap">
+          {% for message in messages %}
+            <div class="message-alert {{ message.tags|default:'info' }}">
+              {% if message.tags == 'success' %}✓{% elif message.tags == 'error' %}✕{% else %}ℹ{% endif %}
+              {{ message }}
+              <button class="message-close" onclick="this.parentElement.remove()">×</button>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  var btn = document.getElementById('hamburgerBtn');
+  var sidebar = document.getElementById('sidebar');
+  var overlay = document.getElementById('sidebarOverlay');
+  function toggle(){ sidebar.classList.toggle('open'); overlay.classList.toggle('open'); }
+  if(btn){ btn.addEventListener('click', toggle); }
+  if(overlay){ overlay.addEventListener('click', toggle); }
+})();
+</script>
+{% block extra_scripts %}{% endblock %}
 </body>
 </html>
-

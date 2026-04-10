@@ -1,57 +1,101 @@
 {% extends "base.html" %}
-{% block title %}{{ pond.name }} - Smart Fish Farm{% endblock %}
-{% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-        <h1 class="h3 fw-bold mb-1">{{ pond.name }}</h1>
-        <p class="text-muted mb-0">Area {{ pond.area_m2 }} m² • Max depth {{ pond.max_depth_m }} m</p>
-    </div>
-    <a href="{% url 'farm:dashboard' %}" class="btn btn-outline-secondary btn-sm">Back to dashboard</a>
-</div>
+{% block title %}{{ pond.name }}{% endblock %}
+{% block nav_ponds %}active{% endblock %}
+{% block topbar_title %}{{ pond.name }}{% endblock %}
 
-{% if latest_weather %}
-    <div class="card shadow-sm mb-4">
-        <div class="card-body">
-            <h2 class="h6 fw-semibold text-uppercase text-muted mb-3">Latest Water Conditions</h2>
-            <div class="row">
-                <div class="col-md-3">
-                    <div class="fw-semibold">Temperature</div>
-                    <div>{{ latest_weather.water_temp_c }} °C</div>
-                </div>
-                <div class="col-md-3">
-                    <div class="fw-semibold">Dissolved Oxygen</div>
-                    <div>{{ latest_weather.dissolved_oxygen_mg_l }} mg/L</div>
-                </div>
-                <div class="col-md-3">
-                    <div class="fw-semibold">pH</div>
-                    <div>{{ latest_weather.ph }}</div>
-                </div>
-                <div class="col-md-3">
-                    <div class="fw-semibold">Rainfall (24h)</div>
-                    <div>{{ latest_weather.rainfall_mm }} mm</div>
-                </div>
-            </div>
-        </div>
-    </div>
-{% endif %}
-
-<h2 class="h5 fw-semibold mb-2">Fish Batches</h2>
-{% if batches %}
-    <div class="list-group mb-4">
-        {% for batch in batches %}
-            <a href="{% url 'farm:batch_detail' batch.pk %}"
-               class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                <div>
-                    <div class="fw-semibold">{{ batch }}</div>
-                    <small class="text-muted">
-                        Stocked {{ batch.stocking_date }} • Age {{ batch.current_age_days }} days
-                    </small>
-                </div>
-            </a>
-        {% endfor %}
-    </div>
-{% else %}
-    <p class="text-muted">No batches in this pond yet.</p>
-{% endif %}
+{% block topbar_actions %}
+  <a href="{% url 'farm:pond_list' %}" class="btn btn-sm">← Ponds</a>
+  <a href="{% url 'farm:weather_create' %}" class="btn btn-sm">+ Weather</a>
 {% endblock %}
 
+{% block content %}
+<div class="page-header mb-16">
+  <div>
+    <h1>{{ pond.name }}</h1>
+    <p>{{ pond.area_m2 }} m² · Max depth {{ pond.max_depth_m }} m · Added {{ pond.created_at|date:"M d, Y" }}</p>
+  </div>
+</div>
+
+{# ── Water conditions ────────────────────────────────────── #}
+{% if latest_weather %}
+<div class="card mb-16">
+  <div class="card-header">
+    <span class="card-title">Latest Water Conditions</span>
+    <span class="pill pill-info">{{ latest_weather.timestamp|date:"M d, H:i" }}</span>
+  </div>
+  <div class="card-body">
+    <div class="gauge-row">
+      <div class="gauge">
+        <div class="gauge-val" style="color:var(--accent)">{{ latest_weather.water_temp_c }}</div>
+        <div class="gauge-label">Temp °C</div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width:{% widthratio latest_weather.water_temp_c 40 100 %}%;background:var(--accent)"></div>
+        </div>
+      </div>
+      <div class="gauge">
+        <div class="gauge-val" style="color:var(--accent2)">{{ latest_weather.dissolved_oxygen_mg_l }}</div>
+        <div class="gauge-label">DO mg/L</div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width:{% widthratio latest_weather.dissolved_oxygen_mg_l 14 100 %}%;background:var(--accent2)"></div>
+        </div>
+      </div>
+      <div class="gauge">
+        <div class="gauge-val" style="color:#a855f7">{{ latest_weather.ph }}</div>
+        <div class="gauge-label">pH</div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width:{% widthratio latest_weather.ph 14 100 %}%;background:#a855f7"></div>
+        </div>
+      </div>
+      <div class="gauge">
+        <div class="gauge-val" style="color:var(--warn)">{{ latest_weather.rainfall_mm }}</div>
+        <div class="gauge-label">Rainfall mm</div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width:{% widthratio latest_weather.rainfall_mm 100 100 %}%;background:var(--warn)"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="alert-strip alert-strip-info mb-16">
+  ℹ No water records yet for this pond.
+  <a href="{% url 'farm:weather_create' %}" style="margin-left:auto">Log weather →</a>
+</div>
+{% endif %}
+
+{# ── Fish Batches ─────────────────────────────────────────── #}
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Fish Batches</span>
+    <span class="pill pill-accent">{{ batches.count }} batch{{ batches.count|pluralize:"es" }}</span>
+  </div>
+  <div class="card-body" style="padding:10px">
+    {% for batch in batches %}
+      {% with latest=batch.growth_records.last %}
+      <a href="{% url 'farm:batch_detail' batch.pk %}" class="batch-item">
+        <div class="batch-dot" style="background:{% cycle '#00e5b4' '#00b8ff' '#ff6b35' '#a855f7' %}"></div>
+        <div>
+          <div class="batch-name">{{ batch.get_species_display }} Batch</div>
+          <div class="batch-meta">
+            Stocked {{ batch.stocking_date }} · Age {{ batch.current_age_days }} days
+            {% if latest %} · {{ latest.surviving_count }} surviving · {{ latest.avg_weight_g|floatformat:0 }}g avg{% endif %}
+          </div>
+        </div>
+        <div class="batch-right">
+          <div class="batch-kg">{{ batch.latest_biomass_kg|floatformat:1 }} kg</div>
+          <div style="margin-top:3px">
+            {% if batch.current_age_days > 80 %}
+              <span class="pill pill-danger">Near harvest</span>
+            {% else %}
+              <span class="pill pill-success">Growing</span>
+            {% endif %}
+          </div>
+        </div>
+      </a>
+      {% endwith %}
+    {% empty %}
+      <p class="text-muted fs-sm" style="padding:12px">No batches in this pond yet.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
