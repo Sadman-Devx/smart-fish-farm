@@ -5,7 +5,7 @@
 
 {% block topbar_actions %}
   <a href="{% url 'farm:daily_feed_report' %}" class="btn btn-sm">Daily Report</a>
-  <form method="post" action="{% url 'farm:send_test_alert' %}" style="display:inline">
+  <form method="post" action="{% url 'farm:send_test_alert' %}" style="display:inline;margin:0">
     {% csrf_token %}
     <button type="submit" class="btn btn-sm">Send Alert</button>
   </form>
@@ -21,20 +21,23 @@
 <div class="weather-bar">
   <div class="weather-left">
     <span class="weather-icon">⛅</span>
-    <div>
-      <div class="fs-xs text-muted mb-0" style="margin-bottom:3px">
+    <div style="min-width:0">
+      <div class="fs-xs text-muted" style="margin-bottom:3px;white-space:nowrap">
         {{ daily_api_location|default:"—" }} · {{ daily_api_date }}
       </div>
-      <div class="d-flex align-center gap-8">
-        <div class="weather-temp">{{ daily_api_temp_c|floatformat:1 }}°C</div>
-        <div class="text-muted fs-sm">{{ daily_api_condition }}</div>
+      <div style="display:flex;align-items:baseline;gap:8px">
+        <span class="weather-temp">{{ daily_api_temp_c|floatformat:1 }}°C</span>
+        <span class="text-muted fs-sm" style="white-space:nowrap">{{ daily_api_condition }}</span>
       </div>
     </div>
+
     <div class="weather-divider"></div>
+
     <div class="weather-detail">
       <strong>API Feed Rate</strong>
       {{ daily_api_feed_percent|floatformat:0 }}% of biomass
     </div>
+
     {% if avg_recent_temp_c %}
     <div class="weather-divider"></div>
     <div class="weather-detail">
@@ -43,25 +46,28 @@
     </div>
     {% endif %}
   </div>
+
   <div class="weather-tags">
-    {% if daily_api_temp_c >= 28 %}
-      <span class="pill pill-success">Good feeding temp</span>
-    {% elif daily_api_temp_c >= 22 %}
-      <span class="pill pill-info">Moderate temp</span>
-    {% else %}
-      <span class="pill pill-warn">Low temp — reduce feed</span>
-    {% endif %}
+    {% with temp=daily_api_temp_c|floatformat:0 %}
+      {% if temp >= "28" %}
+        <span class="pill pill-success">Good feeding temp</span>
+      {% elif temp >= "22" %}
+        <span class="pill pill-info">Moderate temp</span>
+      {% else %}
+        <span class="pill pill-warn">Low temp — reduce feed</span>
+      {% endif %}
+    {% endwith %}
     <span class="pill pill-accent">{{ recommended_feed_source_label }}</span>
   </div>
 </div>
 {% endif %}
 
-{# ── Alerts ─────────────────────────────────────────────────── #}
+{# ── Pending reminders alert ─────────────────────────────────── #}
 {% if reminders_today %}
 <div class="alert-strip">
-  <span style="font-size:15px">⚠</span>
-  <strong>{{ reminders_today }} feeding reminder{{ reminders_today|pluralize }}</strong> pending today
-  <a href="{% url 'farm:reminder_list' %}" style="margin-left:auto">View all →</a>
+  <span style="font-size:16px;flex-shrink:0">⚠</span>
+  <span><strong>{{ reminders_today }} feeding reminder{{ reminders_today|pluralize }}</strong> pending today</span>
+  <a href="{% url 'farm:reminder_list' %}" style="margin-left:auto;white-space:nowrap">View all →</a>
 </div>
 {% endif %}
 
@@ -101,11 +107,10 @@
   {% endif %}
 </div>
 
-{# ── Batches + Feed 7-day ──────────────────────────────────── #}
-<div class="row-3">
+{# ── Active Batches + Reminders ──────────────────────────────── #}
+<div style="display:grid;grid-template-columns:1fr 340px;gap:16px">
 
-  {# Active Batches #}
-  <div class="card" style="grid-column: span 2">
+  <div class="card">
     <div class="card-header">
       <span class="card-title">Active Batches</span>
       <span class="pill pill-info">{{ total_batches }} total</span>
@@ -114,11 +119,8 @@
       {% for batch in active_batches %}
         {% with latest=batch.growth_records.last %}
         <a href="{% url 'farm:batch_detail' batch.pk %}" class="batch-item">
-          <div class="batch-dot" style="background:
-            {% cycle '#00e5b4' '#00b8ff' '#ff6b35' '#a855f7' '#f59e0b' '#10b981' %};
-          "></div>
-    
-          <div>
+          <div class="batch-dot" style="background:{% cycle '#00e5b4' '#00b8ff' '#ff6b35' '#a855f7' '#f59e0b' '#10b981' %}"></div>
+          <div style="min-width:0;flex:1">
             <div class="batch-name">{{ batch.get_species_display }} — {{ batch.pond.name }}</div>
             <div class="batch-meta">
               Age {{ batch.current_age_days }} days
@@ -126,7 +128,7 @@
             </div>
           </div>
           <div class="batch-right">
-            <div class="batch-kg">{{ batch.latest_biomass_kg|floatformat:1 }} kg biomass</div>
+            <div class="batch-kg">{{ batch.latest_biomass_kg|floatformat:1 }} kg</div>
             <div style="margin-top:3px">
               {% if batch.current_age_days > 80 %}
                 <span class="pill pill-danger">Near harvest</span>
@@ -138,12 +140,11 @@
         </a>
         {% endwith %}
       {% empty %}
-        <p class="text-muted fs-sm" style="padding:12px">No batches yet. Add one via the admin panel.</p>
+        <p class="text-muted fs-sm" style="padding:16px">No batches yet. Add fish batches via the admin panel.</p>
       {% endfor %}
     </div>
   </div>
 
-  {# Reminders sidebar #}
   <div class="card">
     <div class="card-header">
       <span class="card-title">Today's Reminders</span>
@@ -155,14 +156,14 @@
           <div class="reminder-dot"></div>
           <div>
             <div class="reminder-text">{{ reminder.batch }}</div>
-            <div class="reminder-meta">{{ reminder.scheduled_for|date:"H:i" }} · {{ reminder.message|truncatechars:50 }}</div>
+            <div class="reminder-meta">{{ reminder.scheduled_for|date:"H:i" }} · {{ reminder.message|truncatechars:48 }}</div>
           </div>
         </div>
       {% empty %}
         <p class="text-muted fs-xs" style="padding:4px 0">No reminders for today.</p>
       {% endfor %}
-      <div style="margin-top:10px">
-        <a href="{% url 'farm:reminder_list' %}" class="btn btn-sm btn-outline w-100" style="justify-content:center">View all reminders</a>
+      <div style="margin-top:12px">
+        <a href="{% url 'farm:reminder_list' %}" class="btn btn-sm btn-outline" style="width:100%;justify-content:center">View all reminders</a>
       </div>
     </div>
   </div>
@@ -171,29 +172,32 @@
 
 {# ── Ponds grid ─────────────────────────────────────────────── #}
 <div>
-  <div class="d-flex align-center justify-between mb-12">
-    <span class="card-title">Ponds</span>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <span class="card-title" style="font-size:15px">Ponds</span>
     <a href="{% url 'farm:pond_list' %}" class="btn btn-sm btn-outline">View all →</a>
   </div>
   <div class="row-3">
     {% for pond in ponds %}
-    <a href="{% url 'farm:pond_detail' pond.pk %}" class="card" style="text-decoration:none;color:inherit;transition:border-color .15s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+    <a href="{% url 'farm:pond_detail' pond.pk %}" class="card"
+       style="text-decoration:none;color:inherit;cursor:pointer;transition:border-color .15s"
+       onmouseover="this.style.borderColor='var(--accent)'"
+       onmouseout="this.style.borderColor='var(--border)'">
       <div class="card-body">
-        <div class="d-flex align-center justify-between mb-12">
-          <span style="font-size:22px">🏞</span>
-          <span class="pill pill-accent">{{ pond.area_m2|floatformat:0 }} m²</span>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <span style="font-size:24px">🏞</span>
+          <span class="badge badge-accent">{{ pond.area_m2|floatformat:0 }} m²</span>
         </div>
         <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800;margin-bottom:4px">{{ pond.name }}</div>
         <div class="fs-xs text-muted">Depth: {{ pond.max_depth_m }} m</div>
       </div>
     </a>
     {% empty %}
-    <p class="text-muted fs-sm">No ponds yet.</p>
+      <p class="text-muted fs-sm">No ponds yet.</p>
     {% endfor %}
   </div>
 </div>
 
-{# ── Daily Feed & Temp table ─────────────────────────────────── #}
+{# ── Daily Feed & Temperature table ─────────────────────────── #}
 <div class="card">
   <div class="card-header">
     <span class="card-title">Daily Feed & Temperature (Last 14 Days)</span>
@@ -206,25 +210,25 @@
           <th>Date</th>
           <th class="text-end">Feed Given (kg)</th>
           <th class="text-end">Recommended (kg)</th>
-          <th class="text-end">Δ</th>
+          <th class="text-end">Status</th>
           <th class="text-end">Avg Water Temp</th>
         </tr>
       </thead>
       <tbody>
         {% for row in daily_feed_temp_rows %}
         <tr>
-          <td>{{ row.date }}</td>
+          <td class="text-muted fs-sm">{{ row.date }}</td>
           <td class="text-end fw-bold" style="color:var(--accent2)">{{ row.feed_kg|floatformat:2 }}</td>
           <td class="text-end text-muted">
             {% if row.recommended_feed_kg is not None %}{{ row.recommended_feed_kg|floatformat:2 }}{% else %}—{% endif %}
           </td>
           <td class="text-end">
             {% if row.recommended_feed_kg is not None %}
-              {% with diff=row.feed_kg|floatformat:2 %}
-                <span class="fs-xs {% if row.feed_kg < row.recommended_feed_kg %}text-warn{% else %}text-success{% endif %}">
-                  {% if row.feed_kg < row.recommended_feed_kg %}↓ under{% else %}✓ ok{% endif %}
-                </span>
-              {% endwith %}
+              {% if row.feed_kg < row.recommended_feed_kg %}
+                <span class="fs-xs text-warn">↓ under</span>
+              {% else %}
+                <span class="fs-xs text-success">✓ ok</span>
+              {% endif %}
             {% else %}—{% endif %}
           </td>
           <td class="text-end text-muted">
@@ -261,7 +265,9 @@
         {% for log in recent_feed %}
         <tr>
           <td class="text-muted fs-sm">{{ log.date }}</td>
-          <td><a href="{% url 'farm:batch_detail' log.batch.pk %}" style="color:var(--accent2)">{{ log.batch }}</a></td>
+          <td>
+            <a href="{% url 'farm:batch_detail' log.batch.pk %}" style="color:var(--accent2)">{{ log.batch }}</a>
+          </td>
           <td class="text-end fw-bold">{{ log.feed_amount_kg }}</td>
           <td class="text-end">
             {% if log.auto_calculated %}
@@ -282,9 +288,9 @@
 
 {# ── Charts ──────────────────────────────────────────────────── #}
 <div>
-  <div class="d-flex align-center justify-between mb-12">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
     <span class="card-title" style="font-size:15px">Analytics</span>
-    <span class="fs-xs text-muted">Charts update with live data</span>
+    <span class="fs-xs text-muted">Powered by Chart.js</span>
   </div>
   <div class="row-3" style="gap:14px">
     <div class="card">
@@ -296,7 +302,7 @@
       <div class="card-body"><canvas id="feedConsumptionChart" height="200"></canvas></div>
     </div>
     <div class="card">
-      <div class="card-header"><span class="card-title">Water Temperature Trend</span></div>
+      <div class="card-header"><span class="card-title">Water Temp Trend</span></div>
       <div class="card-body"><canvas id="weatherTrendChart" height="200"></canvas></div>
     </div>
   </div>
@@ -312,7 +318,7 @@
   </div>
 </div>
 
-{# JSON data for charts #}
+{# ── JSON for charts ────────────────────────────────────────── #}
 {{ biomass_labels|json_script:"biomass-labels" }}
 {{ biomass_values|json_script:"biomass-values" }}
 {{ mortality_labels|json_script:"mortality-labels" }}
@@ -328,79 +334,91 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-Chart.defaults.color = '#7a95b8';
-Chart.defaults.borderColor = '#1f3356';
-Chart.defaults.font.family = "'Space Grotesk', sans-serif";
+Chart.defaults.color        = '#7a95b8';
+Chart.defaults.borderColor  = '#1f3356';
+Chart.defaults.font.family  = "'Space Grotesk', system-ui, sans-serif";
 
-const biomassLabels = JSON.parse(document.getElementById('biomass-labels').textContent);
-const biomassValues = JSON.parse(document.getElementById('biomass-values').textContent);
-const mortalityLabels = JSON.parse(document.getElementById('mortality-labels').textContent);
-const mortalityValues = JSON.parse(document.getElementById('mortality-values').textContent);
-const feedCostLabels = JSON.parse(document.getElementById('feed-cost-labels').textContent);
-const feedConsumptionValues = JSON.parse(document.getElementById('feed-consumption-values').textContent);
-const weatherLabels = JSON.parse(document.getElementById('weather-labels').textContent);
-const weatherTempValues = JSON.parse(document.getElementById('weather-temp-values').textContent);
-const targetActualLabels = JSON.parse(document.getElementById('target-actual-labels').textContent);
-const targetActualActualValues = JSON.parse(document.getElementById('target-actual-actual-values').textContent);
-const targetActualTargetValues = JSON.parse(document.getElementById('target-actual-target-values').textContent);
+function safeJson(id){ try{ return JSON.parse(document.getElementById(id).textContent); }catch(e){ return []; } }
 
-function mkGrad(ctx, c1, c2){
+var biomassLabels          = safeJson('biomass-labels');
+var biomassValues          = safeJson('biomass-values');
+var mortalityLabels        = safeJson('mortality-labels');
+var mortalityValues        = safeJson('mortality-values');
+var feedCostLabels         = safeJson('feed-cost-labels');
+var feedConsumptionValues  = safeJson('feed-consumption-values');
+var weatherLabels          = safeJson('weather-labels');
+var weatherTempValues      = safeJson('weather-temp-values');
+var targetActualLabels     = safeJson('target-actual-labels');
+var targetActualActual     = safeJson('target-actual-actual-values');
+var targetActualTarget     = safeJson('target-actual-target-values');
+
+function gradient(ctx, c1, c2){
   var g = ctx.createLinearGradient(0,0,0,200);
   g.addColorStop(0, c1); g.addColorStop(1, c2); return g;
 }
 
-// Biomass
+// Biomass bar
 (function(){
-  var ctx = document.getElementById('biomassChart').getContext('2d');
+  var ctx = document.getElementById('biomassChart');
+  if(!ctx) return;
+  var g = ctx.getContext('2d');
   new Chart(ctx,{type:'bar',data:{labels:biomassLabels,datasets:[{
     label:'Biomass (kg)',data:biomassValues,
-    backgroundColor:mkGrad(ctx,'rgba(0,229,180,.8)','rgba(0,184,255,.4)'),
+    backgroundColor:gradient(g,'rgba(0,229,180,.8)','rgba(0,184,255,.4)'),
     borderRadius:6,borderSkipped:false
-  }]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
-  scales:{x:{ticks:{display:false}},y:{grid:{color:'#1f3356'}}}}});
+  }]},options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+    scales:{x:{ticks:{maxRotation:30,font:{size:10}}},y:{grid:{color:'#1f3356'}}}}});
 })();
 
-// Feed consumption
+// Feed consumption line
 (function(){
-  var ctx = document.getElementById('feedConsumptionChart').getContext('2d');
+  var ctx = document.getElementById('feedConsumptionChart');
+  if(!ctx) return;
   new Chart(ctx,{type:'line',data:{labels:feedCostLabels,datasets:[{
     label:'Feed (kg)',data:feedConsumptionValues,tension:0.35,
-    borderColor:'#00b8ff',backgroundColor:'rgba(0,184,255,.08)',fill:true,pointRadius:3
-  }]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
-  scales:{y:{grid:{color:'#1f3356'}}}}});
+    borderColor:'#00b8ff',backgroundColor:'rgba(0,184,255,.08)',fill:true,pointRadius:3,pointHoverRadius:5
+  }]},options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+    scales:{y:{grid:{color:'#1f3356'}}}}});
 })();
 
-// Weather trend
+// Weather temp line
 (function(){
-  var ctx = document.getElementById('weatherTrendChart').getContext('2d');
+  var ctx = document.getElementById('weatherTrendChart');
+  if(!ctx) return;
   new Chart(ctx,{type:'line',data:{labels:weatherLabels,datasets:[{
     label:'Water Temp (°C)',data:weatherTempValues,tension:0.35,
-    borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,.08)',fill:true,pointRadius:3
-  }]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
-  scales:{y:{grid:{color:'#1f3356'}}}}});
+    borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,.08)',fill:true,pointRadius:3,pointHoverRadius:5
+  }]},options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+    scales:{y:{grid:{color:'#1f3356'}}}}});
 })();
 
-// Target vs Actual
+// Target vs actual
 (function(){
-  var ctx = document.getElementById('targetActualChart').getContext('2d');
+  var ctx = document.getElementById('targetActualChart');
+  if(!ctx) return;
   new Chart(ctx,{type:'line',data:{labels:targetActualLabels,datasets:[
-    {label:'Actual Feed (kg)',data:targetActualActualValues,tension:0.28,borderColor:'#00b8ff',pointRadius:3},
-    {label:'Recommended (kg)',data:targetActualTargetValues,tension:0.28,borderColor:'#ff6b35',borderDash:[6,4],pointRadius:2}
+    {label:'Actual (kg)',data:targetActualActual,tension:0.28,borderColor:'#00b8ff',pointRadius:3},
+    {label:'Recommended (kg)',data:targetActualTarget,tension:0.28,borderColor:'#ff6b35',borderDash:[6,4],pointRadius:2}
   ]},options:{responsive:true,maintainAspectRatio:false,
-  plugins:{legend:{labels:{color:'#7a95b8',font:{size:11}}}},
-  scales:{y:{grid:{color:'#1f3356'}}}}});
+    plugins:{legend:{labels:{color:'#7a95b8',font:{size:11}}}},
+    scales:{y:{grid:{color:'#1f3356'}}}}});
 })();
 
 // Mortality
 (function(){
-  var ctx = document.getElementById('mortalityChart').getContext('2d');
+  var ctx = document.getElementById('mortalityChart');
+  if(!ctx) return;
   new Chart(ctx,{type:'line',data:{labels:mortalityLabels,datasets:[{
     label:'Mortality (%)',data:mortalityValues,tension:0.32,
-    borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.08)',fill:true,pointRadius:3
-  }]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
-  scales:{y:{grid:{color:'#1f3356'}}}}});
+    borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.08)',fill:true,pointRadius:3,pointHoverRadius:5
+  }]},options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+    scales:{y:{grid:{color:'#1f3356'}}}}});
 })();
 </script>
 {% endblock %}
