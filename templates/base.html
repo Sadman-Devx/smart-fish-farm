@@ -27,36 +27,29 @@
 
     <nav class="sidebar-nav">
       <div class="nav-section">Overview</div>
-      <a href="{% url 'farm:dashboard' %}"
-         class="nav-item {% block nav_dashboard %}{% endblock %}">
+      <a href="{% url 'farm:dashboard' %}" class="nav-item {% block nav_dashboard %}{% endblock %}">
         <span class="nav-icon">⬡</span> Dashboard
       </a>
 
       <div class="nav-section">Farm</div>
-      <a href="{% url 'farm:pond_list' %}"
-         class="nav-item {% block nav_ponds %}{% endblock %}">
+      <a href="{% url 'farm:pond_list' %}" class="nav-item {% block nav_ponds %}{% endblock %}">
         <span class="nav-icon">◯</span> Ponds
       </a>
-      <a href="{% url 'farm:weather_create' %}"
-         class="nav-item {% block nav_weather %}{% endblock %}">
+      <a href="{% url 'farm:weather_create' %}" class="nav-item {% block nav_weather %}{% endblock %}">
         <span class="nav-icon">🌡</span> Log Weather
       </a>
-      <a href="{% url 'farm:growth_create' %}"
-         class="nav-item {% block nav_growth %}{% endblock %}">
+      <a href="{% url 'farm:growth_create' %}" class="nav-item {% block nav_growth %}{% endblock %}">
         <span class="nav-icon">📈</span> Log Growth
       </a>
-      <a href="{% url 'farm:feed_log_create' %}"
-         class="nav-item {% block nav_feed %}{% endblock %}">
+      <a href="{% url 'farm:feed_log_create' %}" class="nav-item {% block nav_feed %}{% endblock %}">
         <span class="nav-icon">🪣</span> Log Feed
       </a>
 
       <div class="nav-section">Reports</div>
-      <a href="{% url 'farm:daily_feed_report' %}"
-         class="nav-item {% block nav_report %}{% endblock %}">
+      <a href="{% url 'farm:daily_feed_report' %}" class="nav-item {% block nav_report %}{% endblock %}">
         <span class="nav-icon">◫</span> Daily Feed Report
       </a>
-      <a href="{% url 'farm:reminder_list' %}"
-         class="nav-item {% block nav_reminders %}{% endblock %}">
+      <a href="{% url 'farm:reminder_list' %}" class="nav-item {% block nav_reminders %}{% endblock %}">
         <span class="nav-icon">🔔</span> Reminders
       </a>
     </nav>
@@ -74,16 +67,14 @@
 
   <!-- ── Main ────────────────────────────────────────── -->
   <div class="main">
+
     <!-- Topbar -->
     <div class="topbar">
-      <div class="d-flex align-center gap-12">
-        <button class="hamburger" id="hamburgerBtn">☰</button>
-        <div>
-          <span class="topbar-title">{% block topbar_title %}Dashboard{% endblock %}</span>
-        </div>
-        <span class="d-flex align-center gap-8 fs-xs text-muted" style="margin-left:4px">
-          <span class="indicator"></span> Live
-        </span>
+      <div class="topbar-left">
+        <button class="hamburger" id="hamburgerBtn" aria-label="Toggle menu">☰</button>
+        <span class="topbar-title">{% block topbar_title %}Dashboard{% endblock %}</span>
+        <span class="indicator"></span>
+        <span class="fs-xs text-muted">Live</span>
       </div>
       <div class="topbar-actions">
         {% block topbar_actions %}
@@ -95,13 +86,14 @@
       </div>
     </div>
 
-    <!-- Content -->
+    <!-- Page content -->
     <div class="content">
+
       {% if messages %}
         <div class="messages-wrap">
           {% for message in messages %}
             <div class="message-alert {{ message.tags|default:'info' }}">
-              {% if message.tags == 'success' %}✓{% elif message.tags == 'error' %}✕{% else %}ℹ{% endif %}
+              {% if message.tags == 'success' %}✓{% elif message.tags == 'error' or message.tags == 'danger' %}✕{% else %}ℹ{% endif %}
               {{ message }}
               <button class="message-close" onclick="this.parentElement.remove()">×</button>
             </div>
@@ -110,21 +102,25 @@
       {% endif %}
 
       {% block content %}{% endblock %}
-    </div>
-  </div>
 
-</div>
+    </div>
+  </div><!-- /.main -->
+
+</div><!-- /.shell -->
 
 <script>
 (function(){
-  var btn = document.getElementById('hamburgerBtn');
+  var btn     = document.getElementById('hamburgerBtn');
   var sidebar = document.getElementById('sidebar');
   var overlay = document.getElementById('sidebarOverlay');
-  function toggle(){ sidebar.classList.toggle('open'); overlay.classList.toggle('open'); }
-  if(btn){ btn.addEventListener('click', toggle); }
-  if(overlay){ overlay.addEventListener('click', toggle); }
+  function open()  { sidebar.classList.add('open');    overlay.classList.add('open'); }
+  function close() { sidebar.classList.remove('open'); overlay.classList.remove('open'); }
+  function toggle(){ sidebar.classList.contains('open') ? close() : open(); }
+  if (btn)     btn.addEventListener('click', toggle);
+  if (overlay) overlay.addEventListener('click', close);
 })();
 </script>
+
 {% block extra_scripts %}{% endblock %}
 </body>
 </html>
