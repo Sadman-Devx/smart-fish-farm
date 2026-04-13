@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Harvests{% endblock %}
+{% block nav_harvest %}active{% endblock %}
+{% block topbar_title %}Harvest Records{% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'farm:harvest_create' %}" class="btn btn-accent btn-sm">+ Log Harvest</a>
+{% endblock %}
+
+{% block content %}
+<div class="page-header mb-16">
+  <div><h1>Harvests</h1><p>All recorded harvest events and revenue</p></div>
+</div>
+
+<div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
+  <div class="kpi-card k-teal">
+    <div class="kpi-label">Total Harvests</div>
+    <div class="kpi-value">{{ harvests.count }} <small>events</small></div>
+  </div>
+  <div class="kpi-card k-success">
+    <div class="kpi-label">Total Weight</div>
+    <div class="kpi-value">{{ total_kg|floatformat:1 }} <small>kg</small></div>
+  </div>
+  <div class="kpi-card k-orange">
+    <div class="kpi-label">Gross Revenue</div>
+    <div class="kpi-value">৳ {{ total_revenue|floatformat:0 }}</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">All Harvest Events</span>
+    <a href="{% url 'farm:harvest_create' %}" class="btn btn-sm btn-accent">+ New Harvest</a>
+  </div>
+  {% if harvests %}
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Date</th><th>Batch / Pond</th><th class="text-end">Count</th>
+          <th class="text-end">Avg Weight</th><th class="text-end">Total (kg)</th>
+          <th class="text-end">Price/kg</th><th class="text-end">Revenue (৳)</th><th>Buyer</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for h in harvests %}
+        <tr>
+          <td class="text-muted fs-sm">{{ h.harvest_date }}</td>
+          <td><a href="{% url 'farm:batch_detail' h.batch.pk %}" style="color:var(--accent2)">{{ h.batch }}</a></td>
+          <td class="text-end">{{ h.harvested_count }}</td>
+          <td class="text-end">{{ h.avg_weight_g|floatformat:0 }} g</td>
+          <td class="text-end fw-bold">{{ h.total_weight_kg|floatformat:2 }}</td>
+          <td class="text-end text-muted">{{ h.price_per_kg|floatformat:2 }}</td>
+          <td class="text-end fw-bold" style="color:var(--success)">{{ h.gross_revenue|floatformat:0 }}</td>
+          <td class="text-muted fs-sm">{{ h.buyer_name|default:"—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card-body" style="text-align:center;padding:48px">
+    <div style="font-size:40px;margin-bottom:12px">🎣</div>
+    <p class="text-muted fs-sm">No harvest records yet.</p>
+    <a href="{% url 'farm:harvest_create' %}" class="btn btn-accent" style="margin-top:12px">Log First Harvest</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
