@@ -1,20 +1,24 @@
-from datetime import timedelta
+"""
+NEW VIEWS — append to farm/views.py  (or replace views.py entirely)
+These views add: Harvest, Expense, Mortality, Alerts, Pond Notes,
+Profit & Loss report, and auto-alert generation on weather save.
+"""
+from datetime import timedelta, date
+from decimal import Decimal
 
-from django.db.models import Avg, Sum
-from django.db.models.functions import TruncDate
+from django.db.models import Avg, Sum, Count, Q
+from django.db.models.functions import TruncDate, TruncMonth
 from django.contrib import messages
 from django.conf import settings
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from .models import (
-    FeedLog,
-    FeedingProfile,
-    FeedingReminder,
-    FishBatch,
-    GrowthRecord,
-    Pond,
-    WeatherRecord,
+    FeedLog, FeedingProfile, FeedingReminder, FishBatch,
+    GrowthRecord, Pond, WeatherRecord,
+    HarvestRecord, Expense, MortalityLog, FarmAlert, PondNote,
 )
 from . import forms
 from .services import (
@@ -27,7 +31,67 @@ from .services import (
 from .tasks import send_daily_feed_alert
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _generate_water_alerts(weather_record: WeatherRecord) -> None:
+    """Auto-create FarmAlert entries when water readings are out of range."""
+    pond = weather_record.pond
+    temp = float(weather_record.water_temp_c)
+    do   = float(weather_record.dissolved_oxygen_mg_l)
+    ph   = float(weather_record.ph)
+
+    checks = [
+        (do < 4.0,        "low_oxygen",  "critical", f"Pond {pond.name}: DO critically low at {do} mg/L (min 4.0)"),
+        (do < 5.0,        "low_oxygen",  "warning",  f"Pond {pond.name}: DO below optimum at {do} mg/L"),
+        (temp > 34.0,     "high_temp",   "critical", f"Pond {pond.name}: Water temp critically high at {temp}°C"),
+        (temp > 31.0,     "high_temp",   "warning",  f"Pond {pond.name}: Water temp elevated at {temp}°C"),
+        (temp < 15.0,     "low_temp",    "warning",  f"Pond {pond.name}: Water temp low at {temp}°C — reduce feed"),
+        (ph < 6.5 or ph > 9.0, "ph_out","warning",  f"Pond {pond.name}: pH out of range at {ph}"),
+    ]
+
+    for condition, atype, level, msg in checks:
+        if condition:
+            # Don't duplicate unresolved alerts of same type for same pond
+            exists = FarmAlert.objects.filter(
+                pond=pond, alert_type=atype, resolved=False
+            ).exists()
+            if not exists:
+                FarmAlert.objects.create(
+                    pond=pond, alert_type=atype, level=level, message=msg
+                )
+
+
+def _generate_harvest_due_alerts() -> None:
+    """Create harvest-due alerts for batches within 7 days of estimated harvest."""
+    today = timezone.now().date()
+    for batch in FishBatch.objects.prefetch_related("growth_records"):
+        pred = predict_batch_growth(batch)
+        days = pred.get("estimated_days_to_market", 999)
+        if days <= 7:
+            exists = FarmAlert.objects.filter(
+                alert_type="harvest_due",
+                message__contains=str(batch.id),
+                resolved=False,
+            ).exists()
+            if not exists:
+                FarmAlert.objects.create(
+                    pond=batch.pond,
+                    alert_type="harvest_due",
+                    level="warning",
+                    message=f"Batch #{batch.id} ({batch}) estimated harvest in {days} day(s) "
+                            f"(est. {pred.get('estimated_harvest_date')}).",
+                )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dashboard (unchanged signature, just re-exported)
+# ─────────────────────────────────────────────────────────────────────────────
+
 def dashboard(request):
+    _generate_harvest_due_alerts()
+
     daily_api_weather = get_or_update_daily_weather()
     ponds = Pond.objects.all().annotate(
         total_biomass_kg=Sum("batches__growth_records__avg_weight_g")
@@ -42,277 +106,225 @@ def dashboard(request):
     pending_reminders = FeedingReminder.objects.filter(
         scheduled_for__date=today, sent=False
     ).order_by("scheduled_for")
-    feed_cost_per_kg = float(getattr(settings, "FEED_COST_PER_KG", 1.0))
 
-    biomass_labels = []
-    biomass_values = []
+    # Unresolved alerts count for topbar badge
+    unresolved_alerts = FarmAlert.objects.filter(resolved=False).count()
+    critical_alerts   = FarmAlert.objects.filter(resolved=False, level="critical")
+
+    feed_cost_per_kg = float(getattr(settings, "FEED_COST_PER_KG", 1.2))
+
+    biomass_labels, biomass_values = [], []
     for batch in active_batches:
-        biomass_labels.append(f"{batch.pond.name} - {batch.get_species_display()}")
+        biomass_labels.append(f"{batch.pond.name} – {batch.get_species_display()}")
         biomass_values.append(round(batch.latest_biomass_kg, 2))
 
-    mortality_labels = []
-    mortality_values = []
+    mortality_labels, mortality_values = [], []
     for batch in active_batches:
-        latest_growth = batch.growth_records.order_by("-date").first()
-        current_count = latest_growth.surviving_count if latest_growth else batch.initial_count
-        if batch.initial_count > 0:
-            mortality_pct = ((batch.initial_count - current_count) / batch.initial_count) * 100.0
-        else:
-            mortality_pct = 0.0
-        mortality_labels.append(f"{batch.pond.name} - {batch.get_species_display()}")
-        mortality_values.append(round(max(mortality_pct, 0.0), 2))
+        latest = batch.growth_records.order_by("-date").first()
+        current = latest.surviving_count if latest else batch.initial_count
+        pct = ((batch.initial_count - current) / batch.initial_count * 100) if batch.initial_count else 0
+        mortality_labels.append(f"{batch.pond.name} – {batch.get_species_display()}")
+        mortality_values.append(round(max(pct, 0), 2))
 
-    feed_cost_labels = []
-    feed_cost_values = []
-    feed_consumption_values = []
-    for log in reversed(recent_feed):
+    feed_cost_labels, feed_cost_values, feed_consumption_values = [], [], []
+    for log in reversed(list(recent_feed)):
         feed_cost_labels.append(str(log.date))
         feed_cost_values.append(round(float(log.feed_amount_kg) * feed_cost_per_kg, 2))
         feed_consumption_values.append(round(float(log.feed_amount_kg), 2))
 
-    # Weather trend (recent points)
     weather_points = list(
         WeatherRecord.objects.order_by("-timestamp").values("timestamp", "water_temp_c")[:14]
     )
     weather_points.reverse()
-    weather_labels = [point["timestamp"].strftime("%Y-%m-%d") for point in weather_points]
-    weather_temp_values = [float(point["water_temp_c"]) for point in weather_points]
+    weather_labels     = [p["timestamp"].strftime("%Y-%m-%d") for p in weather_points]
+    weather_temp_values = [float(p["water_temp_c"]) for p in weather_points]
 
-    # Feed vs Growth correlation points
-    feed_growth_points = []
-    for batch in active_batches:
-        feed_by_date = {log.date: float(log.feed_amount_kg) for log in batch.feed_logs.all()}
-        for gr in batch.growth_records.all():
-            feed_amount = feed_by_date.get(gr.date)
-            if feed_amount is None:
-                continue
-            feed_growth_points.append({"x": round(feed_amount, 2), "y": float(gr.avg_weight_g)})
-    feed_growth_points = feed_growth_points[-30:]
-
-    # Temperature vs Appetite: appetite = feed / biomass (%)
-    temp_appetite_points = []
-    for batch in active_batches:
-        growth_records = list(batch.growth_records.all().order_by("date"))
-        if not growth_records:
-            continue
-        for log in batch.feed_logs.all().order_by("date"):
-            matching_growth = None
-            for gr in growth_records:
-                if gr.date <= log.date:
-                    matching_growth = gr
-                else:
-                    break
-            if matching_growth is None or matching_growth.surviving_count <= 0:
-                continue
-            biomass_kg = (matching_growth.surviving_count * float(matching_growth.avg_weight_g)) / 1000.0
-            if biomass_kg <= 0:
-                continue
-            weather = (
-                WeatherRecord.objects.filter(pond=batch.pond, timestamp__date__lte=log.date)
-                .order_by("-timestamp")
-                .first()
-            )
-            if weather is None:
-                continue
-            appetite_pct = (float(log.feed_amount_kg) / biomass_kg) * 100.0
-            temp_appetite_points.append({"x": float(weather.water_temp_c), "y": round(appetite_pct, 2)})
-    temp_appetite_points = temp_appetite_points[-30:]
-
-    total_ponds = ponds.count()
-    total_batches = active_batches.count()
-    reminders_today = pending_reminders.count()
-    feed_last_7_days_kg = round(sum(float(log.feed_amount_kg) for log in recent_feed), 2)
-    avg_recent_temp_c = (
-        round(sum(weather_temp_values) / len(weather_temp_values), 1)
-        if weather_temp_values
-        else None
-    )
-    today_feed_given_kg = (
-        FeedLog.objects.filter(date=today).aggregate(total=Sum("feed_amount_kg"))["total"] or 0
-    )
-    # Recommended feed for today based on today's temperature (DailyWeather)
-    recommended_feed_today_kg = 0.0
-    recommended_feed_sources = set()
-    for batch in active_batches:
-        suggested = smart_feed_kg_for_batch(batch, day=today)
-        if suggested is not None:
-            recommended_feed_today_kg += float(suggested)
-            has_pond_weather = (
-                WeatherRecord.objects.filter(pond=batch.pond).order_by("-timestamp").first()
-                is not None
-            )
-            if has_pond_weather:
-                recommended_feed_sources.add("pond")
-            elif daily_api_weather is not None:
-                recommended_feed_sources.add("api")
-            else:
-                recommended_feed_sources.add("unknown")
-    recommended_feed_today_kg = round(recommended_feed_today_kg, 2)
-    if recommended_feed_sources == {"pond"}:
-        recommended_feed_source_label = "Pond weather"
-    elif recommended_feed_sources == {"api"}:
-        recommended_feed_source_label = "API weather"
-    elif recommended_feed_sources:
-        recommended_feed_source_label = "Mixed sources"
-    else:
-        recommended_feed_source_label = "No recommendation"
-
-    # Daily operation summary: total feed per day + average water temperature per day
     feed_daily = list(
         FeedLog.objects.values("date")
         .annotate(total_feed_kg=Sum("feed_amount_kg"))
         .order_by("-date")[:14]
     )
     feed_daily.reverse()
-
     weather_daily = list(
         WeatherRecord.objects.annotate(day=TruncDate("timestamp"))
-        .values("day")
-        .annotate(avg_temp_c=Avg("water_temp_c"))
-        .order_by("-day")[:21]
+        .values("day").annotate(avg_temp_c=Avg("water_temp_c")).order_by("-day")[:21]
     )
-    temp_by_day = {row["day"]: float(row["avg_temp_c"]) for row in weather_daily if row["day"] is not None}
+    temp_by_day = {r["day"]: float(r["avg_temp_c"]) for r in weather_daily if r["day"]}
 
     daily_feed_temp_rows = []
+    target_actual_labels, target_actual_actual_values, target_actual_target_values = [], [], []
     for row in feed_daily:
         day = row["date"]
-        recommended_feed_kg = 0.0
-        has_any_reco = False
-        for batch in active_batches:
-            suggested = smart_feed_kg_for_batch(batch, day=day)
-            if suggested is not None:
-                recommended_feed_kg += float(suggested)
-                has_any_reco = True
-        daily_feed_temp_rows.append(
-            {
-                "date": day,
-                "feed_kg": round(float(row["total_feed_kg"]), 2),
-                "temp_c": round(temp_by_day[day], 1) if day in temp_by_day else None,
-                "recommended_feed_kg": round(recommended_feed_kg, 2) if has_any_reco else None,
-            }
+        rec_kg = sum(
+            smart_feed_kg_for_batch(b, day=day) or 0 for b in active_batches
         )
-    target_actual_labels = [str(row["date"]) for row in daily_feed_temp_rows]
-    target_actual_actual_values = [row["feed_kg"] for row in daily_feed_temp_rows]
-    target_actual_target_values = [
-        row["recommended_feed_kg"] if row["recommended_feed_kg"] is not None else None
-        for row in daily_feed_temp_rows
-    ]
+        daily_feed_temp_rows.append({
+            "date": day,
+            "feed_kg": round(float(row["total_feed_kg"]), 2),
+            "temp_c": round(temp_by_day[day], 1) if day in temp_by_day else None,
+            "recommended_feed_kg": round(rec_kg, 2) if rec_kg else None,
+        })
+        target_actual_labels.append(str(day))
+        target_actual_actual_values.append(round(float(row["total_feed_kg"]), 2))
+        target_actual_target_values.append(round(rec_kg, 2) if rec_kg else None)
 
-    context = {
-        "ponds": ponds,
-        "active_batches": active_batches,
-        "recent_feed": recent_feed,
-        "pending_reminders": pending_reminders,
-        "total_ponds": total_ponds,
-        "total_batches": total_batches,
-        "reminders_today": reminders_today,
-        "feed_last_7_days_kg": feed_last_7_days_kg,
-        "today_feed_given_kg": today_feed_given_kg,
-        "recommended_feed_today_kg": recommended_feed_today_kg,
-        "recommended_feed_source_label": recommended_feed_source_label,
-        "avg_recent_temp_c": avg_recent_temp_c,
-        "daily_api_temp_c": daily_api_weather.temperature_c if daily_api_weather else None,
-        "daily_api_condition": daily_api_weather.condition if daily_api_weather else None,
-        "daily_api_feed_percent": daily_api_weather.feed_percent if daily_api_weather else None,
-        "daily_api_date": daily_api_weather.date if daily_api_weather else today,
-        "daily_api_location": daily_api_weather.location_query if daily_api_weather else None,
-        "daily_feed_temp_rows": daily_feed_temp_rows,
-        "target_actual_labels": target_actual_labels,
-        "target_actual_actual_values": target_actual_actual_values,
-        "target_actual_target_values": target_actual_target_values,
-        "biomass_labels": biomass_labels,
-        "biomass_values": biomass_values,
-        "mortality_labels": mortality_labels,
-        "mortality_values": mortality_values,
-        "feed_cost_labels": feed_cost_labels,
-        "feed_cost_values": feed_cost_values,
-        "feed_consumption_values": feed_consumption_values,
-        "weather_labels": weather_labels,
-        "weather_temp_values": weather_temp_values,
-        "feed_growth_points": feed_growth_points,
-        "temp_appetite_points": temp_appetite_points,
-    }
+    total_ponds   = ponds.count()
+    total_batches = active_batches.count()
+    reminders_today = pending_reminders.count()
+    feed_last_7_days_kg = round(sum(float(l.feed_amount_kg) for l in recent_feed), 2)
+    avg_recent_temp_c = (
+        round(sum(weather_temp_values) / len(weather_temp_values), 1)
+        if weather_temp_values else None
+    )
+    today_feed_given_kg = (
+        FeedLog.objects.filter(date=today).aggregate(total=Sum("feed_amount_kg"))["total"] or 0
+    )
+    recommended_feed_today_kg = 0.0
+    recommended_feed_sources  = set()
+    for batch in active_batches:
+        suggested = smart_feed_kg_for_batch(batch, day=today)
+        if suggested is not None:
+            recommended_feed_today_kg += float(suggested)
+            has_pw = WeatherRecord.objects.filter(pond=batch.pond).exists()
+            recommended_feed_sources.add("pond" if has_pw else ("api" if daily_api_weather else "unknown"))
+    recommended_feed_today_kg = round(recommended_feed_today_kg, 2)
+    if recommended_feed_sources == {"pond"}:
+        label = "Pond weather"
+    elif recommended_feed_sources == {"api"}:
+        label = "API weather"
+    elif recommended_feed_sources:
+        label = "Mixed sources"
+    else:
+        label = "No recommendation"
+
+    context = dict(
+        ponds=ponds, active_batches=active_batches, recent_feed=recent_feed,
+        pending_reminders=pending_reminders, total_ponds=total_ponds,
+        total_batches=total_batches, reminders_today=reminders_today,
+        feed_last_7_days_kg=feed_last_7_days_kg,
+        today_feed_given_kg=today_feed_given_kg,
+        recommended_feed_today_kg=recommended_feed_today_kg,
+        recommended_feed_source_label=label,
+        avg_recent_temp_c=avg_recent_temp_c,
+        daily_api_temp_c=daily_api_weather.temperature_c if daily_api_weather else None,
+        daily_api_condition=daily_api_weather.condition if daily_api_weather else None,
+        daily_api_feed_percent=daily_api_weather.feed_percent if daily_api_weather else None,
+        daily_api_date=daily_api_weather.date if daily_api_weather else today,
+        daily_api_location=daily_api_weather.location_query if daily_api_weather else None,
+        daily_feed_temp_rows=daily_feed_temp_rows,
+        target_actual_labels=target_actual_labels,
+        target_actual_actual_values=target_actual_actual_values,
+        target_actual_target_values=target_actual_target_values,
+        biomass_labels=biomass_labels, biomass_values=biomass_values,
+        mortality_labels=mortality_labels, mortality_values=mortality_values,
+        feed_cost_labels=feed_cost_labels, feed_cost_values=feed_cost_values,
+        feed_consumption_values=feed_consumption_values,
+        weather_labels=weather_labels, weather_temp_values=weather_temp_values,
+        unresolved_alerts=unresolved_alerts, critical_alerts=critical_alerts,
+    )
     return render(request, "farm/dashboard.html", context)
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Pond
+# ─────────────────────────────────────────────────────────────────────────────
 
 def pond_list(request):
     ponds = Pond.objects.all()
     return render(request, "farm/pond_list.html", {"ponds": ponds})
 
 
-def pond_detail(request, pk: int):
+def pond_detail(request, pk):
     pond = get_object_or_404(Pond, pk=pk)
-    batches = pond.batches.all().prefetch_related("growth_records")
+    batches      = pond.batches.all().prefetch_related("growth_records")
     latest_weather = pond.weather_records.first()
-    return render(
-        request,
-        "farm/pond_detail.html",
-        {"pond": pond, "batches": batches, "latest_weather": latest_weather},
-    )
+    pond_notes   = pond.notes.all()[:10]
+    active_alerts = pond.alerts.filter(resolved=False)
+
+    note_form = forms.PondNoteForm(initial={"pond": pond})
+
+    if request.method == "POST" and "add_note" in request.POST:
+        note_form = forms.PondNoteForm(request.POST)
+        if note_form.is_valid():
+            note_form.save()
+            messages.success(request, "Note added.")
+            return redirect("farm:pond_detail", pk=pond.pk)
+
+    return render(request, "farm/pond_detail.html", {
+        "pond": pond, "batches": batches,
+        "latest_weather": latest_weather,
+        "pond_notes": pond_notes,
+        "active_alerts": active_alerts,
+        "note_form": note_form,
+    })
 
 
-def batch_detail(request, pk: int):
+# ─────────────────────────────────────────────────────────────────────────────
+# Batch detail
+# ─────────────────────────────────────────────────────────────────────────────
+
+def batch_detail(request, pk):
     batch = get_object_or_404(FishBatch, pk=pk)
     growth_records = batch.growth_records.all()
-    feed_logs = batch.feed_logs.all()
-    latest_weather = (
-        WeatherRecord.objects.filter(pond=batch.pond).order_by("-timestamp").first()
-    )
+    feed_logs      = batch.feed_logs.all()
+    latest_weather = WeatherRecord.objects.filter(pond=batch.pond).order_by("-timestamp").first()
     today = timezone.now().date()
     today_feed_log = feed_logs.filter(date=today).first()
 
-    # smart automatic feed calculation
     auto_feed_kg = smart_feed_kg_for_batch(batch)
-    assumed_fcr = float(getattr(settings, "DEFAULT_FCR", 1.5))
-    projected_gain_kg = None
-    projected_next_avg_weight_g = None
-    ai_prediction = None
+    assumed_fcr  = float(getattr(settings, "DEFAULT_FCR", 1.5))
+    projected_gain_kg = projected_next_avg_weight_g = None
     if auto_feed_kg is not None:
-        projected_gain_kg = projected_weight_gain_kg(auto_feed_kg, assumed_fcr)
+        projected_gain_kg         = projected_weight_gain_kg(auto_feed_kg, assumed_fcr)
         projected_next_avg_weight_g = projected_avg_weight_g(batch, auto_feed_kg, assumed_fcr)
     ai_prediction = predict_batch_growth(batch, feed_kg=auto_feed_kg)
+
+    mortality_logs = batch.mortality_logs.all()[:10]
+    total_mortality = batch.mortality_logs.aggregate(total=Sum("count"))["total"] or 0
+    harvests = batch.harvests.all()
 
     if request.method == "POST":
         form = forms.FeedLogForm(request.POST, batch=batch, initial_amount_kg=auto_feed_kg)
         if form.is_valid():
-            feed_log = form.save()
+            form.save()
             FeedingReminder.objects.get_or_create(
                 batch=batch,
                 scheduled_for=timezone.now() + timedelta(hours=24),
                 defaults={"message": "Time to feed this batch again."},
             )
+            messages.success(request, "Feeding log saved.")
             return redirect("farm:batch_detail", pk=batch.pk)
     else:
         form = forms.FeedLogForm(batch=batch, initial_amount_kg=auto_feed_kg)
 
-    return render(
-        request,
-        "farm/batch_detail.html",
-        {
-            "batch": batch,
-            "growth_records": growth_records,
-            "feed_logs": feed_logs,
-            "latest_weather": latest_weather,
-            "auto_feed_kg": auto_feed_kg,
-            "assumed_fcr": assumed_fcr,
-            "projected_gain_kg": projected_gain_kg,
-            "projected_next_avg_weight_g": projected_next_avg_weight_g,
-            "ai_prediction": ai_prediction,
-            "today_feed_log": today_feed_log,
-            "feed_form": form,
-        },
-    )
+    return render(request, "farm/batch_detail.html", {
+        "batch": batch, "growth_records": growth_records,
+        "feed_logs": feed_logs, "latest_weather": latest_weather,
+        "auto_feed_kg": auto_feed_kg, "assumed_fcr": assumed_fcr,
+        "projected_gain_kg": projected_gain_kg,
+        "projected_next_avg_weight_g": projected_next_avg_weight_g,
+        "ai_prediction": ai_prediction, "today_feed_log": today_feed_log,
+        "feed_form": form,
+        "mortality_logs": mortality_logs, "total_mortality": total_mortality,
+        "harvests": harvests,
+    })
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Water quality — auto-generate alerts
+# ─────────────────────────────────────────────────────────────────────────────
 
 def weather_create(request):
     if request.method == "POST":
         form = forms.WeatherRecordForm(request.POST)
         if form.is_valid():
-            form.save()
+            record = form.save()
+            _generate_water_alerts(record)          # ← auto alerts
+            messages.success(request, "Water record saved. Alerts checked.")
             return redirect("farm:dashboard")
     else:
         form = forms.WeatherRecordForm()
-    return render(request, "farm/simple_form.html", {"form": form, "title": "Log Weather"})
+    return render(request, "farm/simple_form.html", {"form": form, "title": "Log Water Quality"})
 
 
 def growth_create(request):
@@ -320,6 +332,7 @@ def growth_create(request):
         form = forms.GrowthRecordForm(request.POST)
         if form.is_valid():
             form.save()
+            messages.success(request, "Growth record saved.")
             return redirect("farm:dashboard")
     else:
         form = forms.GrowthRecordForm()
@@ -331,11 +344,16 @@ def feed_log_create(request):
         form = forms.FeedLogForm(request.POST)
         if form.is_valid():
             form.save()
+            messages.success(request, "Feed log saved.")
             return redirect("farm:dashboard")
     else:
         form = forms.FeedLogForm()
     return render(request, "farm/simple_form.html", {"form": form, "title": "Log Feed"})
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Reminders & daily report (unchanged)
+# ─────────────────────────────────────────────────────────────────────────────
 
 def reminder_list(request):
     reminders = FeedingReminder.objects.order_by("scheduled_for")
@@ -344,49 +362,228 @@ def reminder_list(request):
 
 def daily_feed_report(request):
     today = timezone.now().date()
-    batches = (
-        FishBatch.objects.all()
-        .select_related("pond")
-        .prefetch_related("growth_records")
-    )
-
+    batches = FishBatch.objects.all().select_related("pond").prefetch_related("growth_records")
     rows = []
     for batch in batches:
         biomass_kg = batch.latest_biomass_kg
-        latest_weather = (
-            WeatherRecord.objects.filter(pond=batch.pond).order_by("-timestamp").first()
-        )
+        latest_weather = WeatherRecord.objects.filter(pond=batch.pond).order_by("-timestamp").first()
         temp = latest_weather.water_temp_c if latest_weather else None
-        suggested_feed_kg = smart_feed_kg_for_batch(batch)
-
-        rows.append(
-            {
-                "pond": batch.pond,
-                "batch": batch,
-                "biomass_kg": biomass_kg,
-                "temperature": temp,
-                "suggested_feed_kg": suggested_feed_kg,
-            }
-        )
-
-    context = {
-        "today": today,
-        "rows": rows,
-    }
-    return render(request, "farm/daily_feed_report.html", context)
+        suggested = smart_feed_kg_for_batch(batch)
+        rows.append({"pond": batch.pond, "batch": batch,
+                     "biomass_kg": biomass_kg, "temperature": temp,
+                     "suggested_feed_kg": suggested})
+    return render(request, "farm/daily_feed_report.html", {"today": today, "rows": rows})
 
 
 def send_test_alert(request):
     if request.method != "POST":
         return redirect("farm:dashboard")
-
     try:
         send_daily_feed_alert.delay()
         messages.success(request, "Test alert queued successfully.")
     except Exception:
-        # Fallback keeps testing possible even if broker is unavailable.
         send_daily_feed_alert()
-        messages.warning(request, "Broker unavailable, sent test alert synchronously.")
-
+        messages.warning(request, "Broker unavailable — sent synchronously.")
     return redirect("farm:dashboard")
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NEW: Harvest
+# ─────────────────────────────────────────────────────────────────────────────
+
+def harvest_list(request):
+    harvests = HarvestRecord.objects.select_related("batch__pond").all()
+    total_revenue = harvests.aggregate(
+        rev=Sum("price_per_kg")  # computed per-row below
+    )
+    # real revenue needs per-row multiplication; compute in Python
+    total_rev = sum(h.gross_revenue for h in harvests)
+    total_kg  = harvests.aggregate(kg=Sum("total_weight_kg"))["kg"] or 0
+    return render(request, "farm/harvest_list.html", {
+        "harvests": harvests,
+        "total_revenue": round(total_rev, 2),
+        "total_kg": total_kg,
+    })
+
+
+def harvest_create(request):
+    if request.method == "POST":
+        form = forms.HarvestRecordForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Harvest record saved.")
+            return redirect("farm:harvest_list")
+    else:
+        form = forms.HarvestRecordForm()
+    return render(request, "farm/simple_form.html", {"form": form, "title": "Log Harvest"})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NEW: Expenses
+# ─────────────────────────────────────────────────────────────────────────────
+
+def expense_list(request):
+    expenses = Expense.objects.select_related("pond").all()
+    total    = expenses.aggregate(t=Sum("amount"))["t"] or 0
+    by_cat   = (
+        expenses.values("category")
+        .annotate(total=Sum("amount"))
+        .order_by("-total")
+    )
+    return render(request, "farm/expense_list.html", {
+        "expenses": expenses,
+        "total": total,
+        "by_cat": by_cat,
+    })
+
+
+def expense_create(request):
+    if request.method == "POST":
+        form = forms.ExpenseForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Expense recorded.")
+            return redirect("farm:expense_list")
+    else:
+        form = forms.ExpenseForm()
+    return render(request, "farm/simple_form.html", {"form": form, "title": "Add Expense"})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NEW: Mortality log
+# ─────────────────────────────────────────────────────────────────────────────
+
+def mortality_create(request):
+    if request.method == "POST":
+        form = forms.MortalityLogForm(request.POST)
+        if form.is_valid():
+            ml = form.save()
+            # Auto alert if mortality > 50 fish in one event
+            if ml.count > 50:
+                FarmAlert.objects.create(
+                    pond=ml.batch.pond,
+                    alert_type="high_mortality",
+                    level="critical",
+                    message=f"High mortality event: {ml.count} fish lost in {ml.batch} "
+                            f"({ml.get_cause_display()}) on {ml.date}.",
+                )
+            messages.success(request, "Mortality log saved.")
+            return redirect("farm:batch_detail", pk=ml.batch.pk)
+    else:
+        form = forms.MortalityLogForm()
+    return render(request, "farm/simple_form.html", {"form": form, "title": "Log Mortality"})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NEW: Alerts centre
+# ─────────────────────────────────────────────────────────────────────────────
+
+def alert_list(request):
+    show_resolved = request.GET.get("resolved") == "1"
+    alerts = FarmAlert.objects.select_related("pond").filter(
+        resolved=show_resolved
+    )
+    unresolved_count = FarmAlert.objects.filter(resolved=False).count()
+    return render(request, "farm/alert_list.html", {
+        "alerts": alerts,
+        "show_resolved": show_resolved,
+        "unresolved_count": unresolved_count,
+    })
+
+
+@require_POST
+def alert_resolve(request, pk):
+    alert = get_object_or_404(FarmAlert, pk=pk)
+    alert.resolve()
+    messages.success(request, "Alert resolved.")
+    return redirect("farm:alert_list")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NEW: Profit & Loss report
+# ─────────────────────────────────────────────────────────────────────────────
+
+def profit_loss_report(request):
+    today = timezone.now().date()
+    # default: current month
+    month_str = request.GET.get("month", today.strftime("%Y-%m"))
+    try:
+        year, month = int(month_str.split("-")[0]), int(month_str.split("-")[1])
+    except Exception:
+        year, month = today.year, today.month
+
+    start = date(year, month, 1)
+    if month == 12:
+        end = date(year + 1, 1, 1)
+    else:
+        end = date(year, month + 1, 1)
+
+    # Revenue from harvests
+    harvests_qs = HarvestRecord.objects.filter(
+        harvest_date__gte=start, harvest_date__lt=end
+    ).select_related("batch__pond")
+    revenue = sum(h.gross_revenue for h in harvests_qs)
+
+    # Expenses
+    expenses_qs = Expense.objects.filter(date__gte=start, date__lt=end)
+    total_expense = float(expenses_qs.aggregate(t=Sum("amount"))["t"] or 0)
+
+    # Feed cost from feed logs
+    feed_qs = FeedLog.objects.filter(date__gte=start, date__lt=end)
+    feed_kg = float(feed_qs.aggregate(kg=Sum("feed_amount_kg"))["kg"] or 0)
+    feed_cost_per_kg = float(getattr(settings, "FEED_COST_PER_KG", 1.2))
+    feed_cost = round(feed_kg * feed_cost_per_kg, 2)
+
+    total_cost = round(total_expense + feed_cost, 2)
+    net_profit = round(revenue - total_cost, 2)
+    margin_pct = round((net_profit / revenue * 100) if revenue > 0 else 0, 1)
+
+    by_category = list(
+        expenses_qs.values("category")
+        .annotate(total=Sum("amount"))
+        .order_by("-total")
+    )
+
+    # Monthly trend (last 6 months)
+    monthly_trend = []
+    for i in range(5, -1, -1):
+        m_start = (today.replace(day=1) - timedelta(days=i * 30)).replace(day=1)
+        if m_start.month == 12:
+            m_end = date(m_start.year + 1, 1, 1)
+        else:
+            m_end = date(m_start.year, m_start.month + 1, 1)
+        m_rev = sum(
+            h.gross_revenue for h in
+            HarvestRecord.objects.filter(harvest_date__gte=m_start, harvest_date__lt=m_end)
+        )
+        m_exp = float(
+            Expense.objects.filter(date__gte=m_start, date__lt=m_end)
+            .aggregate(t=Sum("amount"))["t"] or 0
+        )
+        m_feed_kg = float(
+            FeedLog.objects.filter(date__gte=m_start, date__lt=m_end)
+            .aggregate(kg=Sum("feed_amount_kg"))["kg"] or 0
+        )
+        m_total_cost = round(m_exp + m_feed_kg * feed_cost_per_kg, 2)
+        monthly_trend.append({
+            "label": m_start.strftime("%b %Y"),
+            "revenue": round(m_rev, 2),
+            "cost": m_total_cost,
+            "profit": round(m_rev - m_total_cost, 2),
+        })
+
+    return render(request, "farm/profit_loss.html", {
+        "month_str": month_str,
+        "start": start, "end": end,
+        "harvests": harvests_qs,
+        "expenses": expenses_qs,
+        "revenue": round(revenue, 2),
+        "feed_cost": feed_cost,
+        "feed_kg": round(feed_kg, 2),
+        "total_expense": total_expense,
+        "total_cost": total_cost,
+        "net_profit": net_profit,
+        "margin_pct": margin_pct,
+        "by_category": by_category,
+        "monthly_trend": monthly_trend,
+    })
