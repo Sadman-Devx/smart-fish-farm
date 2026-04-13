@@ -1,15 +1,8 @@
 from django.contrib import admin
-
 from .models import (
-    Pond,
-    FishBatch,
-    GrowthRecord,
-    WeatherRecord,
-    DailyWeather,
-    FeedingProfile,
-    FeedLog,
-    FeedingReminder,
-    SensorReading,
+    Pond, FishBatch, GrowthRecord, WeatherRecord, DailyWeather,
+    FeedingProfile, FeedLog, FeedingReminder, SensorReading,
+    HarvestRecord, Expense, MortalityLog, FarmAlert, PondNote,
 )
 
 
@@ -66,3 +59,40 @@ class SensorReadingAdmin(admin.ModelAdmin):
     list_display = ("pond", "sensor_type", "value", "recorded_at", "source")
     list_filter = ("pond", "sensor_type", "recorded_at")
 
+
+@admin.register(HarvestRecord)
+class HarvestRecordAdmin(admin.ModelAdmin):
+    list_display = ("batch", "harvest_date", "harvested_count", "total_weight_kg", "price_per_kg", "buyer_name")
+    list_filter = ("harvest_date", "batch__pond")
+    search_fields = ("batch__pond__name", "buyer_name")
+
+
+@admin.register(Expense)
+class ExpenseAdmin(admin.ModelAdmin):
+    list_display = ("date", "category", "description", "amount", "pond")
+    list_filter = ("category", "date", "pond")
+    search_fields = ("description",)
+
+
+@admin.register(MortalityLog)
+class MortalityLogAdmin(admin.ModelAdmin):
+    list_display = ("batch", "date", "count", "cause")
+    list_filter = ("cause", "date")
+
+
+@admin.register(FarmAlert)
+class FarmAlertAdmin(admin.ModelAdmin):
+    list_display = ("alert_type", "level", "pond", "resolved", "created_at")
+    list_filter = ("level", "alert_type", "resolved")
+    actions = ["mark_resolved"]
+
+    def mark_resolved(self, request, queryset):
+        from django.utils import timezone
+        queryset.update(resolved=True, resolved_at=timezone.now())
+    mark_resolved.short_description = "Mark selected alerts as resolved"
+
+
+@admin.register(PondNote)
+class PondNoteAdmin(admin.ModelAdmin):
+    list_display = ("pond", "author", "created_at")
+    list_filter = ("pond",)
