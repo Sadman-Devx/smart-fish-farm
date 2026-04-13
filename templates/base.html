@@ -36,7 +36,7 @@
         <span class="nav-icon">◯</span> Ponds
       </a>
       <a href="{% url 'farm:weather_create' %}" class="nav-item {% block nav_weather %}{% endblock %}">
-        <span class="nav-icon">🌡</span> Log Weather
+        <span class="nav-icon">🌡</span> Log Water Quality
       </a>
       <a href="{% url 'farm:growth_create' %}" class="nav-item {% block nav_growth %}{% endblock %}">
         <span class="nav-icon">📈</span> Log Growth
@@ -44,8 +44,26 @@
       <a href="{% url 'farm:feed_log_create' %}" class="nav-item {% block nav_feed %}{% endblock %}">
         <span class="nav-icon">🪣</span> Log Feed
       </a>
+      <a href="{% url 'farm:mortality_create' %}" class="nav-item {% block nav_mortality %}{% endblock %}">
+        <span class="nav-icon">💀</span> Log Mortality
+      </a>
 
-      <div class="nav-section">Reports</div>
+      <div class="nav-section">Finance</div>
+      <a href="{% url 'farm:harvest_list' %}" class="nav-item {% block nav_harvest %}{% endblock %}">
+        <span class="nav-icon">🎣</span> Harvests
+      </a>
+      <a href="{% url 'farm:expense_list' %}" class="nav-item {% block nav_expenses %}{% endblock %}">
+        <span class="nav-icon">💰</span> Expenses
+      </a>
+      <a href="{% url 'farm:profit_loss_report' %}" class="nav-item {% block nav_pl %}{% endblock %}">
+        <span class="nav-icon">📊</span> Profit & Loss
+      </a>
+
+      <div class="nav-section">Reports & Alerts</div>
+      <a href="{% url 'farm:alert_list' %}" class="nav-item {% block nav_alerts %}{% endblock %}">
+        <span class="nav-icon">🚨</span> Alerts
+        {% if unresolved_alerts %}<span class="nav-badge" style="background:rgba(239,68,68,.2);color:#ef4444">{{ unresolved_alerts }}</span>{% endif %}
+      </a>
       <a href="{% url 'farm:daily_feed_report' %}" class="nav-item {% block nav_report %}{% endblock %}">
         <span class="nav-icon">◫</span> Daily Feed Report
       </a>
@@ -67,8 +85,6 @@
 
   <!-- ── Main ────────────────────────────────────────── -->
   <div class="main">
-
-    <!-- Topbar -->
     <div class="topbar">
       <div class="topbar-left">
         <button class="hamburger" id="hamburgerBtn" aria-label="Toggle menu">☰</button>
@@ -78,17 +94,17 @@
       </div>
       <div class="topbar-actions">
         {% block topbar_actions %}
-          <a href="{% url 'farm:daily_feed_report' %}" class="btn btn-sm">Daily Report</a>
-          <a href="{% url 'farm:weather_create' %}" class="btn btn-sm">+ Weather</a>
-          <a href="{% url 'farm:growth_create' %}" class="btn btn-sm">+ Growth</a>
+          <a href="{% url 'farm:alert_list' %}" class="btn btn-sm{% if unresolved_alerts %} btn-danger-soft{% endif %}">
+            {% if unresolved_alerts %}🚨 {{ unresolved_alerts }} Alert{{ unresolved_alerts|pluralize }}{% else %}Alerts{% endif %}
+          </a>
+          <a href="{% url 'farm:profit_loss_report' %}" class="btn btn-sm">P&amp;L Report</a>
+          <a href="{% url 'farm:harvest_create' %}" class="btn btn-sm">+ Harvest</a>
           <a href="{% url 'farm:feed_log_create' %}" class="btn btn-accent btn-sm">+ Feed Log</a>
         {% endblock %}
       </div>
     </div>
 
-    <!-- Page content -->
     <div class="content">
-
       {% if messages %}
         <div class="messages-wrap">
           {% for message in messages %}
@@ -100,27 +116,23 @@
           {% endfor %}
         </div>
       {% endif %}
-
       {% block content %}{% endblock %}
-
     </div>
-  </div><!-- /.main -->
+  </div>
 
-</div><!-- /.shell -->
+</div>
 
 <script>
 (function(){
-  var btn     = document.getElementById('hamburgerBtn');
-  var sidebar = document.getElementById('sidebar');
-  var overlay = document.getElementById('sidebarOverlay');
-  function open()  { sidebar.classList.add('open');    overlay.classList.add('open'); }
-  function close() { sidebar.classList.remove('open'); overlay.classList.remove('open'); }
-  function toggle(){ sidebar.classList.contains('open') ? close() : open(); }
-  if (btn)     btn.addEventListener('click', toggle);
-  if (overlay) overlay.addEventListener('click', close);
+  var btn=document.getElementById('hamburgerBtn');
+  var sidebar=document.getElementById('sidebar');
+  var overlay=document.getElementById('sidebarOverlay');
+  function close(){sidebar.classList.remove('open');overlay.classList.remove('open');}
+  function toggle(){sidebar.classList.contains('open')?close():(sidebar.classList.add('open'),overlay.classList.add('open'));}
+  if(btn) btn.addEventListener('click',toggle);
+  if(overlay) overlay.addEventListener('click',close);
 })();
 </script>
-
 {% block extra_scripts %}{% endblock %}
 </body>
 </html>
