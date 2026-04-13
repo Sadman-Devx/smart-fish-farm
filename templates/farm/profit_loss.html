@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}Profit & Loss{% endblock %}
+{% block nav_pl %}active{% endblock %}
+{% block topbar_title %}Profit & Loss{% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'farm:expense_list' %}" class="btn btn-sm">Expenses</a>
+  <a href="{% url 'farm:harvest_list' %}" class="btn btn-sm">Harvests</a>
+  <a href="{% url 'farm:expense_create' %}" class="btn btn-accent btn-sm">+ Add Expense</a>
+{% endblock %}
+
+{% block content %}
+<div class="page-header mb-16">
+  <div>
+    <h1>Profit & Loss Report</h1>
+    <p>Financial summary for {{ start|date:"F Y" }}</p>
+  </div>
+  <form method="get" style="display:flex;align-items:center;gap:8px">
+    <input type="month" name="month" value="{{ month_str }}"
+      style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 12px;font-family:inherit;font-size:13px">
+    <button type="submit" class="btn btn-sm">Go</button>
+  </form>
+</div>
+
+{# ── KPI row ─────────────────────────────────────────────────── #}
+<div class="kpi-grid" style="margin-bottom:20px">
+  <div class="kpi-card k-success">
+    <div class="kpi-label">Gross Revenue</div>
+    <div class="kpi-value">৳ {{ revenue|floatformat:0 }}</div>
+    <div class="kpi-meta">From {{ harvests.count }} harvest event{{ harvests.count|pluralize }}</div>
+  </div>
+  <div class="kpi-card k-orange">
+    <div class="kpi-label">Feed Cost</div>
+    <div class="kpi-value">৳ {{ feed_cost|floatformat:0 }}</div>
+    <div class="kpi-meta">{{ feed_kg|floatformat:1 }} kg × BDT/kg rate</div>
+  </div>
+  <div class="kpi-card k-warn">
+    <div class="kpi-label">Other Expenses</div>
+    <div class="kpi-value">৳ {{ total_expense|floatformat:0 }}</div>
+    <div class="kpi-meta">{{ expenses.count }} expense record{{ expenses.count|pluralize }}</div>
+  </div>
+  <div class="kpi-card k-blue">
+    <div class="kpi-label">Total Cost</div>
+    <div class="kpi-value">৳ {{ total_cost|floatformat:0 }}</div>
+    <div class="kpi-meta">Feed + expenses</div>
+  </div>
+  <div class="kpi-card {% if net_profit >= 0 %}k-success{% else %}k-orange{% endif %}">
+    <div class="kpi-label">Net Profit</div>
+    <div class="kpi-value" style="color:{% if net_profit >= 0 %}var(--success){% else %}var(--danger){% endif %}">
+      ৳ {{ net_profit|floatformat:0 }}
+    </div>
+    <div class="kpi-meta">Margin: {{ margin_pct }}%</div>
+  </div>
+</div>
+
+{# ── Charts + breakdown ──────────────────────────────────────── #}
+<div style="display:grid;grid-template-columns:1fr 300px;gap:16px;margin-bottom:20px">
+  <div class="card">
+    <div class="card-header"><span class="card-title">6-Month Revenue vs Cost vs Profit</span></div>
+    <div class="card-body"><canvas id="plTrendChart" height="220"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-title">Cost Breakdown</span></div>
+    <div class="card-body" style="padding:12px 16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+        <span class="fs-sm">🪣 Feed</span>
+        <span class="fs-sm fw-bold" style="color:var(--accent2)">৳ {{ feed_cost|floatformat:0 }}</span>
+      </div>
+      {% for row in by_category %}
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+        <span class="fs-sm">{{ row.category|title }}</span>
+        <span class="fs-sm fw-bold" style="color:var(--accent3)">৳ {{ row.total|floatformat:0 }}</span>
+      </div>
+      {% endfor %}
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;margin-top:4px">
+        <span class="fs-sm fw-bold">Total Cost</span>
+        <span class="fw-bold" style="color:var(--warn);font-size:15px">৳ {{ total_cost|floatformat:0 }}</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── Harvests this month ──────────────────────────────────────── #}
+{% if harvests %}
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header"><span class="card-title">Harvests This Month</span></div>
+  <div class="table-responsive">
+    <table class="table">
+      <thead><tr><th>Date</th><th>Batch</th><th class="text-end">kg</th><th class="text-end">Price/kg</th><th class="text-end">Revenue (৳)</th></tr></thead>
+      <tbody>
+        {% for h in harvests %}
+        <tr>
+          <td class="text-muted fs-sm">{{ h.harvest_date }}</td>
+          <td><a href="{% url 'farm:batch_detail' h.batch.pk %}" style="color:var(--accent2)">{{ h.batch }}</a></td>
+          <td class="text-end">{{ h.total_weight_kg|floatformat:2 }}</td>
+          <td class="text-end text-muted">{{ h.price_per_kg|floatformat:2 }}</td>
+          <td class="text-end fw-bold" style="color:var(--success)">{{ h.gross_revenue|floatformat:0 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ── Expenses this month ──────────────────────────────────────── #}
+{% if expenses %}
+<div class="card">
+  <div class="card-header"><span class="card-title">Expenses This Month</span></div>
+  <div class="table-responsive">
+    <table class="table">
+      <thead><tr><th>Date</th><th>Category</th><th>Description</th><th class="text-end">Amount (৳)</th></tr></thead>
+      <tbody>
+        {% for exp in expenses %}
+        <tr>
+          <td class="text-muted fs-sm">{{ exp.date }}</td>
+          <td><span class="badge badge-secondary">{{ exp.get_category_display }}</span></td>
+          <td>{{ exp.description }}</td>
+          <td class="text-end fw-bold" style="color:var(--accent3)">{{ exp.amount|floatformat:2 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{{ monthly_trend|json_script:"monthly-trend" }}
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+Chart.defaults.color='#7a95b8';Chart.defaults.borderColor='#1f3356';
+Chart.defaults.font.family="'Space Grotesk',system-ui,sans-serif";
+var trend=JSON.parse(document.getElementById('monthly-trend').textContent);
+var labels=trend.map(function(r){return r.label;});
+new Chart(document.getElementById('plTrendChart'),{type:'bar',
+  data:{labels:labels,datasets:[
+    {label:'Revenue',data:trend.map(function(r){return r.revenue;}),backgroundColor:'rgba(16,185,129,.6)',borderRadius:4},
+    {label:'Cost',data:trend.map(function(r){return r.cost;}),backgroundColor:'rgba(255,107,53,.5)',borderRadius:4},
+    {label:'Profit',data:trend.map(function(r){return r.profit;}),type:'line',borderColor:'#00e5b4',tension:0.35,pointRadius:4,yAxisID:'y'}
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{labels:{color:'#7a95b8',font:{size:11}}}},
+    scales:{y:{grid:{color:'#1f3356'}},x:{grid:{display:false}}}}
+});
+</script>
+{% endblock %}
