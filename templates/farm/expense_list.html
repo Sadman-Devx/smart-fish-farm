@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Expenses{% endblock %}
+{% block nav_expenses %}active{% endblock %}
+{% block topbar_title %}Expenses{% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'farm:expense_create' %}" class="btn btn-accent btn-sm">+ Add Expense</a>
+{% endblock %}
+
+{% block content %}
+<div class="page-header mb-16">
+  <div><h1>Expenses</h1><p>Track all farm costs — feed, medicine, labour, equipment</p></div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 320px;gap:16px;margin-bottom:20px">
+  <div class="card">
+    <div class="card-header"><span class="card-title">Spending by Category</span></div>
+    <div class="card-body" style="padding:12px 16px">
+      {% for row in by_cat %}
+      <div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span class="fs-sm">{{ row.category|title }}</span>
+          <span class="fs-sm fw-bold" style="color:var(--accent)">৳ {{ row.total|floatformat:0 }}</span>
+        </div>
+        <div class="progress-bar" style="height:6px">
+          <div class="progress-fill" style="width:{% widthratio row.total total 100 %}%;background:var(--accent2)"></div>
+        </div>
+      </div>
+      {% empty %}
+        <p class="text-muted fs-sm">No expenses recorded.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="kpi-card k-orange" style="display:flex;flex-direction:column;justify-content:center">
+    <div class="kpi-label">Total Expenses</div>
+    <div class="kpi-value" style="font-size:28px">৳ {{ total|floatformat:0 }}</div>
+    <div class="kpi-meta">All time</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">All Expenses</span>
+    <a href="{% url 'farm:expense_create' %}" class="btn btn-sm btn-accent">+ Add</a>
+  </div>
+  {% if expenses %}
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr><th>Date</th><th>Category</th><th>Description</th><th>Pond</th><th class="text-end">Amount (৳)</th></tr>
+      </thead>
+      <tbody>
+        {% for exp in expenses %}
+        <tr>
+          <td class="text-muted fs-sm">{{ exp.date }}</td>
+          <td>
+            <span class="badge {% if exp.category == 'feed' %}badge-info{% elif exp.category == 'medicine' %}badge-danger{% else %}badge-secondary{% endif %}">
+              {{ exp.get_category_display }}
+            </span>
+          </td>
+          <td>{{ exp.description }}</td>
+          <td class="text-muted fs-sm">{{ exp.pond.name|default:"Farm-wide" }}</td>
+          <td class="text-end fw-bold" style="color:var(--accent3)">{{ exp.amount|floatformat:2 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card-body" style="text-align:center;padding:48px">
+    <div style="font-size:40px;margin-bottom:12px">💰</div>
+    <p class="text-muted fs-sm">No expenses recorded yet.</p>
+    <a href="{% url 'farm:expense_create' %}" class="btn btn-accent" style="margin-top:12px">Add First Expense</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

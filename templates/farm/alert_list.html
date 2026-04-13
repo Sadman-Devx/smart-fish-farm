@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Alerts{% endblock %}
+{% block nav_alerts %}active{% endblock %}
+{% block topbar_title %}Farm Alerts{% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'farm:alert_list' %}" class="btn btn-sm {% if not show_resolved %}active{% endif %}">Active</a>
+  <a href="{% url 'farm:alert_list' %}?resolved=1" class="btn btn-sm {% if show_resolved %}active{% endif %}">Resolved</a>
+{% endblock %}
+
+{% block content %}
+<div class="page-header mb-16">
+  <div>
+    <h1>Alerts Centre</h1>
+    <p>Auto-generated alerts from water quality, mortality, and harvest predictions</p>
+  </div>
+  {% if unresolved_count %}
+  <span class="pill pill-danger" style="font-size:14px;padding:6px 14px">{{ unresolved_count }} unresolved</span>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">{% if show_resolved %}Resolved{% else %}Active{% endif %} Alerts</span>
+    <span class="pill {% if show_resolved %}pill-success{% else %}pill-danger{% endif %}">{{ alerts.count }}</span>
+  </div>
+  {% if alerts %}
+  <div style="padding:12px">
+    {% for alert in alerts %}
+    <div style="display:flex;align-items:flex-start;gap:12px;padding:12px;border-radius:8px;margin-bottom:8px;border:1px solid;
+      {% if alert.level == 'critical' %}background:rgba(239,68,68,.06);border-color:rgba(239,68,68,.25)
+      {% elif alert.level == 'warning' %}background:rgba(245,158,11,.06);border-color:rgba(245,158,11,.25)
+      {% else %}background:rgba(0,184,255,.06);border-color:rgba(0,184,255,.25){% endif %}">
+      <span style="font-size:20px;flex-shrink:0">
+        {% if alert.level == 'critical' %}🔴{% elif alert.level == 'warning' %}🟡{% else %}🔵{% endif %}
+      </span>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
+          <span class="fw-bold fs-sm">{{ alert.get_alert_type_display }}</span>
+          <span class="badge {% if alert.level == 'critical' %}badge-danger{% elif alert.level == 'warning' %}badge-warn{% else %}badge-info{% endif %}">
+            {{ alert.level|upper }}
+          </span>
+          {% if alert.pond %}<span class="badge badge-secondary">{{ alert.pond.name }}</span>{% endif %}
+        </div>
+        <div class="fs-sm" style="color:var(--text)">{{ alert.message }}</div>
+        <div class="fs-xs text-muted" style="margin-top:4px">
+          {{ alert.created_at|date:"M d, Y H:i" }}
+          {% if alert.resolved %} · Resolved {{ alert.resolved_at|date:"M d, Y H:i" }}{% endif %}
+        </div>
+      </div>
+      {% if not alert.resolved %}
+      <form method="post" action="{% url 'farm:alert_resolve' alert.pk %}" style="flex-shrink:0">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm btn-outline" style="color:var(--success);border-color:rgba(16,185,129,.3)">
+          ✓ Resolve
+        </button>
+      </form>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card-body" style="text-align:center;padding:48px">
+    <div style="font-size:40px;margin-bottom:12px">{% if show_resolved %}✅{% else %}🟢{% endif %}</div>
+    <p class="text-muted fs-sm">
+      {% if show_resolved %}No resolved alerts.{% else %}No active alerts — farm looks healthy!{% endif %}
+    </p>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card" style="margin-top:16px">
+  <div class="card-header"><span class="card-title">How alerts are generated</span></div>
+  <div class="card-body">
+    <div class="row-2" style="gap:12px">
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <span style="font-size:18px;flex-shrink:0">🌡</span>
+          <div><div class="fs-sm fw-bold">Water Quality</div><div class="fs-xs text-muted">Auto-triggered when you log water records with DO &lt; 4 mg/L, temp &gt; 34°C, or pH out of 6.5–9.0</div></div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <span style="font-size:18px;flex-shrink:0">💀</span>
+          <div><div class="fs-sm fw-bold">High Mortality</div><div class="fs-xs text-muted">Auto-triggered when you log &gt; 50 fish dead in a single event</div></div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <span style="font-size:18px;flex-shrink:0">🎣</span>
+          <div><div class="fs-sm fw-bold">Harvest Due</div><div class="fs-xs text-muted">Auto-triggered when AI predicts a batch reaches market weight within 7 days</div></div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <span style="font-size:18px;flex-shrink:0">🔔</span>
+          <div><div class="fs-sm fw-bold">Resolve alerts</div><div class="fs-xs text-muted">Click "Resolve" once you've acted on an alert — it moves to the resolved history</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
