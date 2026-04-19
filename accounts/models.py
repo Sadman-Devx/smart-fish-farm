@@ -2,9 +2,11 @@ import secrets
 import string
 from datetime import timedelta
 
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth import get_user_model
 from django.db import models
 from django.utils import timezone
+
+User = get_user_model()
 
 
 def _generate_otp():
@@ -14,60 +16,6 @@ def _generate_otp():
 
 def _otp_expiry():
     return timezone.now() + timedelta(minutes=10)
-
-
-# ── Custom User ───────────────────────────────────────────────────────────────
-class User(AbstractUser):
-    """
-    Extended user with phone, 2FA toggle, and profile fields.
-    """
-    email = models.EmailField(unique=True)
-    phone = models.CharField(max_length=20, blank=True,
-                             help_text="Phone number for SMS OTP (optional)")
-    avatar_initials = models.CharField(max_length=3, blank=True,
-                                       help_text="Auto-set from name")
-    role = models.CharField(
-        max_length=20,
-        choices=[
-            ("owner",   "Farm Owner"),
-            ("manager", "Farm Manager"),
-            ("worker",  "Farm Worker"),
-            ("viewer",  "Viewer (Read-only)"),
-        ],
-        default="manager",
-    )
-    two_factor_enabled = models.BooleanField(default=True)
-    two_factor_method  = models.CharField(
-        max_length=10,
-        choices=[("email", "Email OTP"), ("totp", "Authenticator App")],
-        default="email",
-    )
-    last_login_ip   = models.GenericIPAddressField(null=True, blank=True)
-    last_login_ua   = models.TextField(blank=True)
-    created_at      = models.DateTimeField(auto_now_add=True)
-
-    USERNAME_FIELD  = "email"
-    REQUIRED_FIELDS = ["username"]
-
-    class Meta:
-        verbose_name = "User"
-
-    def save(self, *args, **kwargs):
-        if not self.avatar_initials:
-            parts = (self.get_full_name() or self.email).split()
-            self.avatar_initials = "".join(p[0].upper() for p in parts[:2]) or "?"
-        super().save(*args, **kwargs)
-
-    def __str__(self):
-        return self.email
-
-    @property
-    def display_name(self):
-        return self.get_full_name() or self.email
-
-    @property
-    def can_edit(self):
-        return self.role in ("owner", "manager")
 
 
 # ── OTP Token ─────────────────────────────────────────────────────────────────
@@ -91,7 +39,7 @@ class OTPToken(models.Model):
         self.save()
 
     def __str__(self):
-        return f"OTP for {self.user.email} (valid={self.is_valid()})"
+        return f"OTP for {self.user} (valid={self.is_valid()})"
 
 
 # ── Login Attempt Log ─────────────────────────────────────────────────────────
@@ -129,4 +77,4 @@ class UserSession(models.Model):
         ordering = ["-last_active"]
 
     def __str__(self):
-        return f"{self.user.email} – {self.device_hint or self.ip_address}"
+        return f"{self.user} – {self.device_hint or self.ip_address}"

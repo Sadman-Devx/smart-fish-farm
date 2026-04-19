@@ -1,29 +1,5 @@
 from django.contrib import admin
-from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, OTPToken, LoginAttempt, UserSession
-
-
-@admin.register(User)
-class UserAdmin(BaseUserAdmin):
-    list_display  = ("email", "get_full_name", "role", "two_factor_enabled",
-                     "is_active", "last_login")
-    list_filter   = ("role", "two_factor_enabled", "is_active", "is_staff")
-    search_fields = ("email", "first_name", "last_name")
-    ordering      = ("email",)
-    fieldsets     = BaseUserAdmin.fieldsets + (
-        ("Farm Profile", {
-            "fields": ("phone", "role", "avatar_initials",
-                       "two_factor_enabled", "two_factor_method",
-                       "last_login_ip"),
-        }),
-    )
-    add_fieldsets = (
-        (None, {
-            "classes": ("wide",),
-            "fields": ("email", "username", "password1", "password2",
-                       "role", "two_factor_enabled"),
-        }),
-    )
+from .models import OTPToken, LoginAttempt, UserSession
 
 
 @admin.register(OTPToken)

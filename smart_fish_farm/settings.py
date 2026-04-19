@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'farm',
+    'accounts',
 ]
 
 MIDDLEWARE = [
@@ -157,3 +158,14 @@ DEFAULT_MARKET_WEIGHT_G = float(os.environ.get("DEFAULT_MARKET_WEIGHT_G", "500")
 
 CELERY_BROKER_URL = "memory://"
 CELERY_RESULT_BACKEND = "rpc://"
+
+
+
+LOGIN_URL = '/accounts/login/'
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/accounts/login/'
+
+AUTHENTICATION_BACKENDS = [
+    'accounts.backends.EmailBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
