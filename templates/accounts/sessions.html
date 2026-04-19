@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Active Sessions{% endblock %}
+{% block topbar_title %}Active Sessions{% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'accounts:profile' %}" class="btn btn-sm">← Profile</a>
+{% endblock %}
+
+{% block content %}
+<div class="page-header mb-16">
+  <div>
+    <h1>Active Sessions</h1>
+    <p>All devices currently signed into your account</p>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Sessions</span>
+      <span class="pill pill-info">{{ sessions.count }} active</span>
+    </div>
+    <div class="card-body" style="padding:10px">
+      {% for sess in sessions %}
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;
+        border-radius:8px;margin-bottom:6px;background:var(--surface2);
+        border:1px solid {% if sess.session_key == current_sk %}var(--accent){% else %}transparent{% endif %}">
+        <span style="font-size:22px;flex-shrink:0">
+          {% if 'Mobile' in sess.device_hint %}📱{% elif 'Tablet' in sess.device_hint %}📟{% else %}🖥{% endif %}
+        </span>
+        <div style="flex:1;min-width:0">
+          <div class="fs-sm fw-bold">{{ sess.device_hint|default:"Unknown device" }}</div>
+          <div class="fs-xs text-muted">{{ sess.ip_address|default:"—" }} · Last active {{ sess.last_active|timesince }} ago</div>
+          {% if sess.session_key == current_sk %}
+            <span class="badge badge-success" style="margin-top:3px">Current session</span>
+          {% endif %}
+        </div>
+        {% if sess.session_key != current_sk %}
+        <form method="post" action="{% url 'accounts:revoke_session' sess.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-sm"
+            style="color:var(--danger);border-color:rgba(239,68,68,.3);flex-shrink:0">
+            Revoke
+          </button>
+        </form>
+        {% endif %}
+      </div>
+      {% empty %}
+      <p class="text-muted fs-sm" style="padding:12px">No active sessions found.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Login History (Last 20)</span></div>
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr><th>Time</th><th>IP</th><th class="text-end">Result</th></tr>
+        </thead>
+        <tbody>
+          {% for log in login_log %}
+          <tr>
+            <td class="fs-xs text-muted" style="white-space:nowrap">
+              {{ log.timestamp|date:"M d, H:i" }}
+            </td>
+            <td class="fs-xs">{{ log.ip_address|default:"—" }}</td>
+            <td class="text-end">
+              {% if log.success %}
+                <span class="badge badge-success">✓ OK</span>
+              {% else %}
+                <span class="badge badge-danger">✕ {{ log.reason }}</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="3" class="text-muted fs-sm">No history yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
