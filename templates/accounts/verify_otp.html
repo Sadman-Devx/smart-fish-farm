@@ -1,0 +1,167 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Verify Code — AquaSmart</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#0a1628;--surface:#111e35;--surface2:#162540;--border:#1f3356;
+      --accent:#00e5b4;--accent2:#00b8ff;--text:#e8f4ff;--muted:#7a95b8;
+      --danger:#ef4444;--success:#10b981;--radius:12px;--radius-sm:8px;
+    }
+    html,body{height:100%;background:var(--bg);color:var(--text);
+      font-family:'Space Grotesk',system-ui,sans-serif;font-size:14px}
+    body::before{
+      content:'';position:fixed;inset:0;
+      background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(0,229,180,.07) 0%,transparent 60%);
+      pointer-events:none;
+    }
+    .page{display:flex;align-items:center;justify-content:center;
+      min-height:100vh;padding:20px}
+    .card{
+      background:var(--surface);border:1px solid var(--border);
+      border-radius:var(--radius);padding:40px 36px;
+      width:100%;max-width:400px;
+      box-shadow:0 24px 64px rgba(0,0,0,.4);text-align:center;
+    }
+
+    /* ── Shield icon ── */
+    .shield{
+      width:64px;height:64px;border-radius:16px;
+      background:linear-gradient(135deg,rgba(0,229,180,.15),rgba(0,184,255,.15));
+      border:1px solid rgba(0,229,180,.3);
+      display:inline-flex;align-items:center;justify-content:center;
+      font-size:30px;margin-bottom:20px;
+    }
+    h1{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;margin-bottom:8px}
+    .sub{font-size:13px;color:var(--muted);margin-bottom:6px;line-height:1.6}
+    .email-chip{
+      display:inline-block;background:var(--surface2);
+      border:1px solid var(--border);border-radius:20px;
+      padding:4px 12px;font-size:13px;color:var(--accent2);
+      margin-bottom:28px;font-weight:500;
+    }
+
+    /* ── OTP input ── */
+    .otp-field{margin-bottom:20px}
+    .otp-input{
+      width:100%;background:var(--surface2);border:2px solid var(--border);
+      border-radius:var(--radius-sm);color:var(--text);
+      font-family:'Syne',sans-serif;font-size:28px;font-weight:800;
+      padding:14px;outline:none;text-align:center;
+      letter-spacing:.35em;transition:border-color .15s,box-shadow .15s;
+    }
+    .otp-input:focus{
+      border-color:var(--accent);
+      box-shadow:0 0 0 4px rgba(0,229,180,.12);
+    }
+
+    /* ── Timer ── */
+    .timer{font-size:12px;color:var(--muted);margin-bottom:20px}
+    .timer span{color:var(--accent);font-weight:600}
+
+    /* ── Error ── */
+    .error-box{
+      background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);
+      border-radius:var(--radius-sm);padding:10px 14px;
+      font-size:13px;color:var(--danger);margin-bottom:16px;text-align:left;
+    }
+
+    /* ── Buttons ── */
+    .btn-primary{
+      width:100%;padding:12px;border-radius:var(--radius-sm);
+      background:var(--accent);color:#0a1628;
+      font-family:'Syne',sans-serif;font-size:15px;font-weight:800;
+      border:none;cursor:pointer;transition:opacity .15s;margin-bottom:12px;
+    }
+    .btn-primary:hover{opacity:.88}
+    .btn-ghost{
+      width:100%;padding:10px;border-radius:var(--radius-sm);
+      background:transparent;color:var(--muted);
+      font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:500;
+      border:1px solid var(--border);cursor:pointer;transition:all .15s;
+      margin-bottom:8px;
+    }
+    .btn-ghost:hover{background:var(--surface2);color:var(--text)}
+    .back-link{font-size:12px;color:var(--muted);display:block;margin-top:8px}
+    .back-link a{color:var(--accent2)}
+
+    /* ── Steps indicator ── */
+    .steps{display:flex;align-items:center;justify-content:center;
+      gap:8px;margin-bottom:28px}
+    .step{width:28px;height:4px;border-radius:2px;background:var(--surface2)}
+    .step.done{background:var(--success)}
+    .step.active{background:var(--accent)}
+
+    @media(max-width:480px){.card{padding:28px 20px}}
+  </style>
+</head>
+<body>
+<div class="page">
+  <div class="card">
+
+    <div class="steps">
+      <div class="step done"></div>
+      <div class="step active"></div>
+    </div>
+
+    <div class="shield">🔐</div>
+    <h1>Two-factor verification</h1>
+    <div class="sub">We sent a 6-digit code to</div>
+    <div class="email-chip">{{ masked_email }}</div>
+
+    {% if error %}
+    <div class="error-box">{{ error }}</div>
+    {% endif %}
+
+    <form method="post">
+      {% csrf_token %}
+      <div class="otp-field">
+        <input type="text" name="otp" class="otp-input"
+          maxlength="6" inputmode="numeric" autocomplete="one-time-code"
+          placeholder="000000" autofocus>
+      </div>
+      <div class="timer">Code expires in <span id="countdown">10:00</span></div>
+      <button type="submit" class="btn-primary">Verify code →</button>
+    </form>
+
+    <form method="post" action="{% url 'accounts:resend_otp' %}">
+      {% csrf_token %}
+      <button type="submit" class="btn-ghost">Resend code</button>
+    </form>
+
+    <div class="back-link">
+      Wrong account? <a href="{% url 'accounts:login' %}">Back to sign in</a>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function(){
+  var secs = 600;
+  var el   = document.getElementById('countdown');
+  var t    = setInterval(function(){
+    secs--;
+    if(secs <= 0){ clearInterval(t); el.textContent='Expired'; el.style.color='var(--danger)'; return; }
+    var m = Math.floor(secs/60);
+    var s = secs % 60;
+    el.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+  }, 1000);
+
+  // Auto-submit when 6 digits typed
+  var inp = document.querySelector('.otp-input');
+  if(inp){
+    inp.addEventListener('input', function(){
+      this.value = this.value.replace(/\D/g,'').slice(0,6);
+      if(this.value.length === 6) this.closest('form').submit();
+    });
+  }
+})();
+</script>
+</body>
+</html>
