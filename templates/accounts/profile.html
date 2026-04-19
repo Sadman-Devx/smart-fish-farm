@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}My Profile{% endblock %}
+{% block topbar_title %}My Profile{% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'accounts:change_password' %}" class="btn btn-sm">Change Password</a>
+  <a href="{% url 'accounts:sessions' %}" class="btn btn-sm">Active Sessions</a>
+  <form method="post" action="{% url 'accounts:logout' %}" style="display:inline;margin:0">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-sm" style="color:var(--danger);border-color:rgba(239,68,68,.3)">Sign out</button>
+  </form>
+{% endblock %}
+
+{% block content %}
+<div class="page-header mb-16">
+  <div>
+    <h1>My Profile</h1>
+    <p>Manage your account details and security settings</p>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+  {# ── Identity card ── #}
+  <div class="card">
+    <div class="card-header"><span class="card-title">Account Details</span></div>
+    <div class="card-body">
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;
+        padding-bottom:20px;border-bottom:1px solid var(--border)">
+        <div style="width:56px;height:56px;border-radius:50%;flex-shrink:0;
+          background:linear-gradient(135deg,var(--accent),var(--accent2));
+          display:flex;align-items:center;justify-content:center;
+          font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:#0a1628">
+          {{ request.user.avatar_initials }}
+        </div>
+        <div>
+          <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800">
+            {{ request.user.display_name }}
+          </div>
+          <div class="fs-xs text-muted">{{ request.user.email }}</div>
+          <span class="badge badge-accent" style="margin-top:4px">
+            {{ request.user.get_role_display }}
+          </span>
+        </div>
+      </div>
+
+      <form method="post" style="display:flex;flex-direction:column;gap:14px">
+        {% csrf_token %}
+        {% for field in form %}
+        <div>
+          <label class="form-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}
+            <div class="form-text">{{ field.help_text }}</div>
+          {% endif %}
+          {% for error in field.errors %}
+            <div class="fs-xs text-danger" style="margin-top:4px">{{ error }}</div>
+          {% endfor %}
+        </div>
+        {% endfor %}
+        <button type="submit" class="btn btn-accent" style="margin-top:4px">
+          Save changes
+        </button>
+      </form>
+    </div>
+  </div>
+
+  {# ── Security overview ── #}
+  <div style="display:flex;flex-direction:column;gap:16px">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Security Status</span></div>
+      <div class="card-body" style="padding:12px 16px">
+        <div class="sensor-row">
+          <span class="sensor-label">Two-Factor Auth</span>
+          <span class="sensor-val" style="color:{% if request.user.two_factor_enabled %}var(--success){% else %}var(--danger){% endif %}">
+            {% if request.user.two_factor_enabled %}✓ Enabled{% else %}✕ Disabled{% endif %}
+          </span>
+        </div>
+        <div class="sensor-row">
+          <span class="sensor-label">Method</span>
+          <span class="sensor-val">{{ request.user.get_two_factor_method_display }}</span>
+        </div>
+        <div class="sensor-row">
+          <span class="sensor-label">Last login IP</span>
+          <span class="sensor-val fs-sm">{{ request.user.last_login_ip|default:"—" }}</span>
+        </div>
+        <div class="sensor-row">
+          <span class="sensor-label">Last login</span>
+          <span class="sensor-val fs-sm">{{ request.user.last_login|date:"M d, Y H:i"|default:"—" }}</span>
+        </div>
+        <div style="margin-top:12px">
+          <a href="{% url 'accounts:change_password' %}" class="btn btn-sm btn-outline w-100"
+             style="justify-content:center">Change Password</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Active Sessions</span>
+        <a href="{% url 'accounts:sessions' %}" class="btn btn-sm btn-outline">Manage →</a>
+      </div>
+      <div class="card-body" style="padding:10px 14px">
+        <div class="reminder-item">
+          <div class="reminder-dot" style="background:var(--success)"></div>
+          <div>
+            <div class="reminder-text">Current session</div>
+            <div class="reminder-meta">{{ request.user.last_login_ip|default:"Unknown IP" }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
