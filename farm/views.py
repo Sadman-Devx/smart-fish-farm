@@ -14,6 +14,8 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+from django.contrib.auth.decorators import login_required
+
 
 from .models import (
     FeedLog, FeedingProfile, FeedingReminder, FishBatch,
@@ -89,6 +91,7 @@ def _generate_harvest_due_alerts() -> None:
 # Dashboard (unchanged signature, just re-exported)
 # ─────────────────────────────────────────────────────────────────────────────
 
+@login_required
 def dashboard(request):
     _generate_harvest_due_alerts()
 
@@ -229,11 +232,13 @@ def dashboard(request):
 # Pond
 # ─────────────────────────────────────────────────────────────────────────────
 
+@login_required
 def pond_list(request):
     ponds = Pond.objects.all()
     return render(request, "farm/pond_list.html", {"ponds": ponds})
 
 
+@login_required
 def pond_detail(request, pk):
     pond = get_object_or_404(Pond, pk=pk)
     batches      = pond.batches.all().prefetch_related("growth_records")
@@ -263,6 +268,7 @@ def pond_detail(request, pk):
 # Batch detail
 # ─────────────────────────────────────────────────────────────────────────────
 
+@login_required
 def batch_detail(request, pk):
     batch = get_object_or_404(FishBatch, pk=pk)
     growth_records = batch.growth_records.all()
@@ -314,6 +320,7 @@ def batch_detail(request, pk):
 # Water quality — auto-generate alerts
 # ─────────────────────────────────────────────────────────────────────────────
 
+@login_required
 def weather_create(request):
     if request.method == "POST":
         form = forms.WeatherRecordForm(request.POST)
@@ -327,6 +334,7 @@ def weather_create(request):
     return render(request, "farm/simple_form.html", {"form": form, "title": "Log Water Quality"})
 
 
+@login_required
 def growth_create(request):
     if request.method == "POST":
         form = forms.GrowthRecordForm(request.POST)
@@ -339,6 +347,7 @@ def growth_create(request):
     return render(request, "farm/simple_form.html", {"form": form, "title": "Log Growth"})
 
 
+@login_required
 def feed_log_create(request):
     if request.method == "POST":
         form = forms.FeedLogForm(request.POST)
@@ -355,11 +364,13 @@ def feed_log_create(request):
 # Reminders & daily report (unchanged)
 # ─────────────────────────────────────────────────────────────────────────────
 
+@login_required
 def reminder_list(request):
     reminders = FeedingReminder.objects.order_by("scheduled_for")
     return render(request, "farm/reminder_list.html", {"reminders": reminders})
 
 
+@login_required
 def daily_feed_report(request):
     today = timezone.now().date()
     batches = FishBatch.objects.all().select_related("pond").prefetch_related("growth_records")
@@ -375,6 +386,7 @@ def daily_feed_report(request):
     return render(request, "farm/daily_feed_report.html", {"today": today, "rows": rows})
 
 
+@login_required
 def send_test_alert(request):
     if request.method != "POST":
         return redirect("farm:dashboard")
@@ -391,6 +403,7 @@ def send_test_alert(request):
 # NEW: Harvest
 # ─────────────────────────────────────────────────────────────────────────────
 
+@login_required
 def harvest_list(request):
     harvests = HarvestRecord.objects.select_related("batch__pond").all()
     total_revenue = harvests.aggregate(
@@ -406,6 +419,7 @@ def harvest_list(request):
     })
 
 
+@login_required
 def harvest_create(request):
     if request.method == "POST":
         form = forms.HarvestRecordForm(request.POST)
@@ -422,6 +436,7 @@ def harvest_create(request):
 # NEW: Expenses
 # ─────────────────────────────────────────────────────────────────────────────
 
+@login_required
 def expense_list(request):
     expenses = Expense.objects.select_related("pond").all()
     total    = expenses.aggregate(t=Sum("amount"))["t"] or 0
@@ -437,6 +452,7 @@ def expense_list(request):
     })
 
 
+@login_required
 def expense_create(request):
     if request.method == "POST":
         form = forms.ExpenseForm(request.POST)
@@ -453,6 +469,7 @@ def expense_create(request):
 # NEW: Mortality log
 # ─────────────────────────────────────────────────────────────────────────────
 
+@login_required
 def mortality_create(request):
     if request.method == "POST":
         form = forms.MortalityLogForm(request.POST)
@@ -478,6 +495,7 @@ def mortality_create(request):
 # NEW: Alerts centre
 # ─────────────────────────────────────────────────────────────────────────────
 
+@login_required
 def alert_list(request):
     show_resolved = request.GET.get("resolved") == "1"
     alerts = FarmAlert.objects.select_related("pond").filter(
@@ -503,6 +521,7 @@ def alert_resolve(request, pk):
 # NEW: Profit & Loss report
 # ─────────────────────────────────────────────────────────────────────────────
 
+@login_required
 def profit_loss_report(request):
     today = timezone.now().date()
     # default: current month

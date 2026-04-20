@@ -13,6 +13,11 @@
 </head>
 <body>
 
+{# ── Redirect unauthenticated users to login ───────────────────────── #}
+{% if not request.user.is_authenticated %}
+  <script>window.location.href = "{% url 'accounts:login' %}";</script>
+{% endif %}
+
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
 <div class="shell">
@@ -26,113 +31,235 @@
     </div>
 
     <nav class="sidebar-nav">
+
       <div class="nav-section">Overview</div>
-      <a href="{% url 'farm:dashboard' %}" class="nav-item {% block nav_dashboard %}{% endblock %}">
+      <a href="{% url 'farm:dashboard' %}"
+         class="nav-item {% block nav_dashboard %}{% endblock %}">
         <span class="nav-icon">⬡</span> Dashboard
       </a>
 
       <div class="nav-section">Farm</div>
-      <a href="{% url 'farm:pond_list' %}" class="nav-item {% block nav_ponds %}{% endblock %}">
+      <a href="{% url 'farm:pond_list' %}"
+         class="nav-item {% block nav_ponds %}{% endblock %}">
         <span class="nav-icon">◯</span> Ponds
       </a>
-      <a href="{% url 'farm:weather_create' %}" class="nav-item {% block nav_weather %}{% endblock %}">
+      <a href="{% url 'farm:weather_create' %}"
+         class="nav-item {% block nav_weather %}{% endblock %}">
         <span class="nav-icon">🌡</span> Log Water Quality
       </a>
-      <a href="{% url 'farm:growth_create' %}" class="nav-item {% block nav_growth %}{% endblock %}">
+      <a href="{% url 'farm:growth_create' %}"
+         class="nav-item {% block nav_growth %}{% endblock %}">
         <span class="nav-icon">📈</span> Log Growth
       </a>
-      <a href="{% url 'farm:feed_log_create' %}" class="nav-item {% block nav_feed %}{% endblock %}">
+      <a href="{% url 'farm:feed_log_create' %}"
+         class="nav-item {% block nav_feed %}{% endblock %}">
         <span class="nav-icon">🪣</span> Log Feed
       </a>
-      <a href="{% url 'farm:mortality_create' %}" class="nav-item {% block nav_mortality %}{% endblock %}">
+      <a href="{% url 'farm:mortality_create' %}"
+         class="nav-item {% block nav_mortality %}{% endblock %}">
         <span class="nav-icon">💀</span> Log Mortality
       </a>
 
       <div class="nav-section">Finance</div>
-      <a href="{% url 'farm:harvest_list' %}" class="nav-item {% block nav_harvest %}{% endblock %}">
+      <a href="{% url 'farm:harvest_list' %}"
+         class="nav-item {% block nav_harvest %}{% endblock %}">
         <span class="nav-icon">🎣</span> Harvests
       </a>
-      <a href="{% url 'farm:expense_list' %}" class="nav-item {% block nav_expenses %}{% endblock %}">
+      <a href="{% url 'farm:expense_list' %}"
+         class="nav-item {% block nav_expenses %}{% endblock %}">
         <span class="nav-icon">💰</span> Expenses
       </a>
-      <a href="{% url 'farm:profit_loss_report' %}" class="nav-item {% block nav_pl %}{% endblock %}">
-        <span class="nav-icon">📊</span> Profit & Loss
+      <a href="{% url 'farm:profit_loss_report' %}"
+         class="nav-item {% block nav_pl %}{% endblock %}">
+        <span class="nav-icon">📊</span> Profit &amp; Loss
       </a>
 
-      <div class="nav-section">Reports & Alerts</div>
-      <a href="{% url 'farm:alert_list' %}" class="nav-item {% block nav_alerts %}{% endblock %}">
+      <div class="nav-section">Reports &amp; Alerts</div>
+      <a href="{% url 'farm:alert_list' %}"
+         class="nav-item {% block nav_alerts %}{% endblock %}">
         <span class="nav-icon">🚨</span> Alerts
-        {% if unresolved_alerts %}<span class="nav-badge" style="background:rgba(239,68,68,.2);color:#ef4444">{{ unresolved_alerts }}</span>{% endif %}
+        {% if unresolved_alerts %}
+          <span class="nav-badge"
+                style="background:rgba(239,68,68,.2);color:#ef4444">
+            {{ unresolved_alerts }}
+          </span>
+        {% endif %}
       </a>
-      <a href="{% url 'farm:daily_feed_report' %}" class="nav-item {% block nav_report %}{% endblock %}">
+      <a href="{% url 'farm:daily_feed_report' %}"
+         class="nav-item {% block nav_report %}{% endblock %}">
         <span class="nav-icon">◫</span> Daily Feed Report
       </a>
-      <a href="{% url 'farm:reminder_list' %}" class="nav-item {% block nav_reminders %}{% endblock %}">
+      <a href="{% url 'farm:reminder_list' %}"
+         class="nav-item {% block nav_reminders %}{% endblock %}">
         <span class="nav-icon">🔔</span> Reminders
       </a>
+
+      <div class="nav-section">Account</div>
+      <a href="{% url 'accounts:profile' %}"
+         class="nav-item {% block nav_profile %}{% endblock %}">
+        <span class="nav-icon">👤</span> My Profile
+      </a>
+      <a href="{% url 'accounts:sessions' %}"
+         class="nav-item {% block nav_sessions %}{% endblock %}">
+        <span class="nav-icon">🖥</span> Active Sessions
+      </a>
+
     </nav>
 
+    <!-- ── Sidebar footer: real user info ── -->
     <div class="sidebar-footer">
       <div class="user-row">
-        <div class="user-avatar">FM</div>
-        <div>
-          <div class="user-name">Farm Manager</div>
-          <div class="user-role">Chandpur, BD</div>
-        </div>
+        {% if request.user.is_authenticated %}
+          <div class="user-avatar">
+            {{ request.user.avatar_initials|default:"?" }}
+          </div>
+          <div style="min-width:0;flex:1">
+            <div class="user-name">
+              {{ request.user.display_name|default:request.user.email }}
+            </div>
+            <div class="user-role">
+              {{ request.user.get_role_display|default:"User" }}
+            </div>
+          </div>
+          <!-- Logout button -->
+          <form method="post"
+                action="{% url 'accounts:logout' %}"
+                style="margin:0;flex-shrink:0">
+            {% csrf_token %}
+            <button type="submit"
+                    title="Sign out"
+                    style="background:none;border:none;cursor:pointer;
+                           color:var(--muted);font-size:16px;padding:4px;
+                           line-height:1;transition:color .15s"
+                    onmouseover="this.style.color='var(--danger)'"
+                    onmouseout="this.style.color='var(--muted)'">
+              ⏻
+            </button>
+          </form>
+        {% else %}
+          <div class="user-avatar">?</div>
+          <div>
+            <div class="user-name">Not signed in</div>
+            <div class="user-role">
+              <a href="{% url 'accounts:login' %}"
+                 style="color:var(--accent)">Sign in →</a>
+            </div>
+          </div>
+        {% endif %}
       </div>
     </div>
   </aside>
 
   <!-- ── Main ────────────────────────────────────────── -->
   <div class="main">
+
+    <!-- ── Topbar ── -->
     <div class="topbar">
       <div class="topbar-left">
-        <button class="hamburger" id="hamburgerBtn" aria-label="Toggle menu">☰</button>
-        <span class="topbar-title">{% block topbar_title %}Dashboard{% endblock %}</span>
+        <button class="hamburger"
+                id="hamburgerBtn"
+                aria-label="Toggle menu">☰</button>
+        <span class="topbar-title">
+          {% block topbar_title %}Dashboard{% endblock %}
+        </span>
         <span class="indicator"></span>
         <span class="fs-xs text-muted">Live</span>
       </div>
+
       <div class="topbar-actions">
         {% block topbar_actions %}
-          <a href="{% url 'farm:alert_list' %}" class="btn btn-sm{% if unresolved_alerts %} btn-danger-soft{% endif %}">
-            {% if unresolved_alerts %}🚨 {{ unresolved_alerts }} Alert{{ unresolved_alerts|pluralize }}{% else %}Alerts{% endif %}
+          <!-- Default topbar actions — child templates can override this block -->
+          <a href="{% url 'farm:alert_list' %}"
+             class="btn btn-sm{% if unresolved_alerts %} btn-danger-soft{% endif %}">
+            {% if unresolved_alerts %}
+              🚨 {{ unresolved_alerts }} Alert{{ unresolved_alerts|pluralize }}
+            {% else %}
+              Alerts
+            {% endif %}
           </a>
-          <a href="{% url 'farm:profit_loss_report' %}" class="btn btn-sm">P&amp;L Report</a>
-          <a href="{% url 'farm:harvest_create' %}" class="btn btn-sm">+ Harvest</a>
-          <a href="{% url 'farm:feed_log_create' %}" class="btn btn-accent btn-sm">+ Feed Log</a>
+          <a href="{% url 'farm:profit_loss_report' %}" class="btn btn-sm">
+            P&amp;L Report
+          </a>
+          <a href="{% url 'farm:harvest_create' %}" class="btn btn-sm">
+            + Harvest
+          </a>
+          <a href="{% url 'farm:feed_log_create' %}" class="btn btn-accent btn-sm">
+            + Feed Log
+          </a>
+          <!-- User pill in topbar -->
+          {% if request.user.is_authenticated %}
+          <a href="{% url 'accounts:profile' %}"
+             class="btn btn-sm"
+             style="display:inline-flex;align-items:center;gap:6px">
+            <span style="width:22px;height:22px;border-radius:50%;
+                         background:linear-gradient(135deg,var(--accent),var(--accent2));
+                         display:inline-flex;align-items:center;justify-content:center;
+                         font-size:10px;font-weight:700;color:#0a1628;flex-shrink:0">
+              {{ request.user.avatar_initials|default:"?" }}
+            </span>
+            {{ request.user.display_name|default:request.user.email|truncatechars:18 }}
+          </a>
+          {% endif %}
         {% endblock %}
       </div>
     </div>
 
+    <!-- ── Page content ── -->
     <div class="content">
+
+      {# ── Django messages ── #}
       {% if messages %}
         <div class="messages-wrap">
           {% for message in messages %}
             <div class="message-alert {{ message.tags|default:'info' }}">
-              {% if message.tags == 'success' %}✓{% elif message.tags == 'error' or message.tags == 'danger' %}✕{% else %}ℹ{% endif %}
+              {% if message.tags == 'success' %}✓
+              {% elif message.tags == 'error' or message.tags == 'danger' %}✕
+              {% else %}ℹ
+              {% endif %}
               {{ message }}
-              <button class="message-close" onclick="this.parentElement.remove()">×</button>
+              <button class="message-close"
+                      onclick="this.parentElement.remove()">×</button>
             </div>
           {% endfor %}
         </div>
       {% endif %}
+
       {% block content %}{% endblock %}
     </div>
   </div>
 
-</div>
+</div><!-- /.shell -->
 
+<!-- ── Sidebar toggle script ── -->
 <script>
-(function(){
-  var btn=document.getElementById('hamburgerBtn');
-  var sidebar=document.getElementById('sidebar');
-  var overlay=document.getElementById('sidebarOverlay');
-  function close(){sidebar.classList.remove('open');overlay.classList.remove('open');}
-  function toggle(){sidebar.classList.contains('open')?close():(sidebar.classList.add('open'),overlay.classList.add('open'));}
-  if(btn) btn.addEventListener('click',toggle);
-  if(overlay) overlay.addEventListener('click',close);
+(function () {
+  var btn     = document.getElementById('hamburgerBtn');
+  var sidebar = document.getElementById('sidebar');
+  var overlay = document.getElementById('sidebarOverlay');
+
+  function close() {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('open');
+  }
+  function toggle() {
+    if (sidebar.classList.contains('open')) {
+      close();
+    } else {
+      sidebar.classList.add('open');
+      overlay.classList.add('open');
+    }
+  }
+
+  if (btn)     btn.addEventListener('click', toggle);
+  if (overlay) overlay.addEventListener('click', close);
+
+  // Close sidebar on ESC key
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') close();
+  });
 })();
 </script>
+
 {% block extra_scripts %}{% endblock %}
 </body>
 </html>

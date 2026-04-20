@@ -15,7 +15,7 @@ from django.views.decorators.http import require_POST
 from django.views.decorators.cache import never_cache
 from django.views.decorators.debug import sensitive_post_parameters
 
-from .forms import LoginForm, OTPForm
+from .forms import LoginForm, OTPForm, ProfileForm
 from .models import LoginAttempt, OTPToken, UserSession
 from .security import (
     clear_failures, create_otp, deactivate_session,
@@ -163,7 +163,12 @@ def logout_view(request):
 
 @login_required
 def profile_view(request):
-    return render(request, "accounts/profile.html")
+    form = ProfileForm(request.POST or None, instance=request.user)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Profile updated.")
+        return redirect("accounts:profile")
+    return render(request, "accounts/profile.html", {"form": form})
 
 
 @login_required

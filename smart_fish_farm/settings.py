@@ -52,6 +52,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'accounts.middleware.SessionActivityMiddleware', 
 ]
 
 ROOT_URLCONF = 'smart_fish_farm.urls'
@@ -160,7 +161,7 @@ CELERY_BROKER_URL = "memory://"
 CELERY_RESULT_BACKEND = "rpc://"
 
 
-
+AUTH_USER_MODEL = 'accounts.User'
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
