@@ -15,7 +15,7 @@ from django.views.decorators.http import require_POST
 from django.views.decorators.cache import never_cache
 from django.views.decorators.debug import sensitive_post_parameters
 
-from .forms import LoginForm, OTPForm, ProfileForm
+from .forms import LoginForm, OTPForm, ProfileForm, RegisterForm
 from .models import LoginAttempt, OTPToken, UserSession
 from .security import (
     clear_failures, create_otp, deactivate_session,
@@ -232,3 +232,20 @@ def _mask_email(email):
     local, domain = email.split("@", 1)
     visible = local[:2] if len(local) > 2 else local[0]
     return f"{visible}{'*' * (len(local) - len(visible))}@{domain}"
+
+@never_cache
+def register_view(request):
+    if request.user.is_authenticated:
+        return redirect("farm:dashboard")
+
+    form = RegisterForm(request.POST or None)
+
+    if request.method == "POST" and form.is_valid():
+        user = form.save()
+        ip = get_client_ip(request)
+        ua = request.META.get("HTTP_USER_AGENT", "")
+        _complete_login(request, user, remember=False, ip=ip, ua=ua)
+        messages.success(request, f"Welcome to AquaSmart, {user.display_name}!")
+        return redirect("farm:dashboard")
+
+    return render(request, "accounts/register.html", {"form": form})

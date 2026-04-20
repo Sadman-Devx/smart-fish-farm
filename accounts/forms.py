@@ -48,3 +48,64 @@ class OTPForm(forms.Form):
         if not val.isdigit():
             raise ValidationError("Enter digits only.")
         return val
+
+class RegisterForm(forms.Form):
+    first_name = forms.CharField(
+        max_length=50,
+        widget=forms.TextInput(attrs={"placeholder": "John"}),
+        label="First name",
+    )
+    last_name = forms.CharField(
+        max_length=50,
+        widget=forms.TextInput(attrs={"placeholder": "Doe"}),
+        label="Last name",
+    )
+    email = forms.EmailField(
+        widget=forms.EmailInput(attrs={"placeholder": "you@example.com"}),
+        label="Email address",
+    )
+    password1 = forms.CharField(
+        widget=forms.PasswordInput(attrs={"placeholder": "Min. 8 characters"}),
+        label="Password",
+        min_length=8,
+    )
+    password2 = forms.CharField(
+        widget=forms.PasswordInput(attrs={"placeholder": "Repeat password"}),
+        label="Confirm password",
+    )
+
+    def clean_email(self):
+        email = self.cleaned_data["email"].strip().lower()
+        if User.objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError("An account with this email already exists.")
+        return email
+
+    def clean(self):
+        cleaned = super().clean()
+        p1 = cleaned.get("password1")
+        p2 = cleaned.get("password2")
+        if p1 and p2 and p1 != p2:
+            self.add_error("password2", "Passwords do not match.")
+        return cleaned
+
+    def save(self):
+        data = self.cleaned_data
+        email = data["email"]
+        username = email.split("@")[0]
+        # Make username unique if needed
+        base = username
+        counter = 1
+        while User.objects.filter(username=username).exists():
+            username = f"{base}{counter}"
+            counter += 1
+
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=data["password1"],
+            first_name=data["first_name"],
+            last_name=data["last_name"],
+            role="viewer",                 # default role for self-registered users
+            two_factor_enabled=False,      # can enable later from profile
+        )
+        return user

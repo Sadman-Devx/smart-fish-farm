@@ -39,6 +39,13 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.sites', 
+
+    'allauth',                       
+    'allauth.account',               
+    'allauth.socialaccount',         
+    'allauth.socialaccount.providers.google',
+
     'rest_framework',
     'farm',
     'accounts',
@@ -50,6 +57,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'allauth.account.middleware.AccountMiddleware', 
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'accounts.middleware.SessionActivityMiddleware', 
@@ -161,6 +169,30 @@ CELERY_BROKER_URL = "memory://"
 CELERY_RESULT_BACKEND = "rpc://"
 
 
+SITE_ID = 1   # ← add this
+
+# ── Allauth configuration ──────────────────────────────────────────
+ACCOUNT_LOGIN_METHODS         = {'email'}
+ACCOUNT_EMAIL_REQUIRED        = True
+ACCOUNT_USERNAME_REQUIRED     = False
+ACCOUNT_EMAIL_VERIFICATION    = 'optional'   # change to 'mandatory' for prod
+ACCOUNT_AUTHENTICATION_METHOD = 'email'
+ACCOUNT_USER_MODEL_USERNAME_FIELD = None
+
+SOCIALACCOUNT_PROVIDERS = {
+    'google': {
+        'SCOPE': ['profile', 'email'],
+        'AUTH_PARAMS': {'access_type': 'online'},
+        'OAUTH_PKCE_ENABLED': True,
+    }
+}
+
+SOCIALACCOUNT_AUTO_SIGNUP     = True
+SOCIALACCOUNT_LOGIN_ON_GET    = True
+LOGIN_REDIRECT_URL            = '/'
+LOGOUT_REDIRECT_URL           = '/accounts/login/'
+
+
 AUTH_USER_MODEL = 'accounts.User'
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/'
@@ -168,5 +200,6 @@ LOGOUT_REDIRECT_URL = '/accounts/login/'
 
 AUTHENTICATION_BACKENDS = [
     'accounts.backends.EmailBackend',
+    'allauth.account.auth_backends.AuthenticationBackend',
     'django.contrib.auth.backends.ModelBackend',
 ]
