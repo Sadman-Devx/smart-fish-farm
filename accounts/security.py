@@ -97,9 +97,9 @@ def remaining_lockout_seconds(email: str, ip: str | None) -> int:
 
 def register_session(user, request) -> None:
     from .models import UserSession
-    sk  = request.session.session_key or ""
-    ip  = get_client_ip(request)
-    ua  = request.META.get("HTTP_USER_AGENT", "")
+    sk   = request.session.session_key or ""
+    ip   = get_client_ip(request)
+    ua   = request.META.get("HTTP_USER_AGENT", "")
     hint = device_hint_from_ua(ua)
 
     UserSession.objects.update_or_create(
@@ -139,10 +139,28 @@ def send_otp_email(user, otp_token) -> None:
         f"If you did not request this, please ignore this email.\n\n"
         f"— AquaSmart Security"
     )
-    send_mail(
-        subject=subject,
-        message=message,
-        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@aquasmart.local"),
-        recipient_list=[user.email],
-        fail_silently=True,
-    )
+
+    # ── Always print to terminal so you never get locked out ──────────────────
+    print("\n" + "=" * 50)
+    print(f"  OTP FOR: {user.email}")
+    print(f"  CODE:    {otp_token.token}")
+    print(f"  EXPIRES: 10 minutes")
+    print("=" * 50 + "\n")
+
+    # ── Send real email (works when EMAIL_BACKEND=smtp in .env) ───────────────
+    try:
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email=getattr(
+                settings, "DEFAULT_FROM_EMAIL", "noreply@aquasmart.local"
+            ),
+            recipient_list=[user.email],
+            fail_silently=False,   # raise exception so we can log the error
+        )
+        print(f"[OTP] Email sent to {user.email}")
+
+    except Exception as e:
+        # Email failed but OTP is still visible in terminal above
+        print(f"[OTP] Email sending failed: {e}")
+        print("[OTP] Use the code printed in terminal above.")
