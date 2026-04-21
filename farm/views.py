@@ -1,7 +1,9 @@
 """
-NEW VIEWS — append to farm/views.py  (or replace views.py entirely)
-These views add: Harvest, Expense, Mortality, Alerts, Pond Notes,
-Profit & Loss report, and auto-alert generation on weather save.
+farm/views.py — Smart Fish Farm Management System
+─────────────────────────────────────────────────
+Access policy:
+  • GET  (read)  → open to everyone including anonymous guests
+  • POST (write) → @login_required (data-modifying actions)
 """
 from datetime import timedelta, date
 from decimal import Decimal
@@ -34,7 +36,7 @@ from .tasks import send_daily_feed_alert
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Helpers
+# Internal helpers (unchanged)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _generate_water_alerts(weather_record: WeatherRecord) -> None:
@@ -55,7 +57,6 @@ def _generate_water_alerts(weather_record: WeatherRecord) -> None:
 
     for condition, atype, level, msg in checks:
         if condition:
-            # Don't duplicate unresolved alerts of same type for same pond
             exists = FarmAlert.objects.filter(
                 pond=pond, alert_type=atype, resolved=False
             ).exists()
@@ -88,12 +89,17 @@ def _generate_harvest_due_alerts() -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Dashboard (unchanged signature, just re-exported)
+# Dashboard — PUBLIC (read-only)
 # ─────────────────────────────────────────────────────────────────────────────
 
-@login_required
 def dashboard(request):
-    _generate_harvest_due_alerts()
+    """
+    Main dashboard. Accessible to guests (read-only view).
+    Harvest-due alert generation runs only for authenticated users
+    to avoid unnecessary computation on every anonymous hit.
+    """
+    if request.user.is_authenticated:
+        _generate_harvest_due_alerts()
 
     daily_api_weather = get_or_update_daily_weather()
     ponds = Pond.objects.all().annotate(
@@ -110,7 +116,6 @@ def dashboard(request):
         scheduled_for__date=today, sent=False
     ).order_by("scheduled_for")
 
-    # Unresolved alerts count for topbar badge
     unresolved_alerts = FarmAlert.objects.filter(resolved=False).count()
     critical_alerts   = FarmAlert.objects.filter(resolved=False, level="critical")
 
@@ -139,7 +144,7 @@ def dashboard(request):
         WeatherRecord.objects.order_by("-timestamp").values("timestamp", "water_temp_c")[:14]
     )
     weather_points.reverse()
-    weather_labels     = [p["timestamp"].strftime("%Y-%m-%d") for p in weather_points]
+    weather_labels      = [p["timestamp"].strftime("%Y-%m-%d") for p in weather_points]
     weather_temp_values = [float(p["water_temp_c"]) for p in weather_points]
 
     feed_daily = list(
@@ -157,14 +162,12 @@ def dashboard(request):
     daily_feed_temp_rows = []
     target_actual_labels, target_actual_actual_values, target_actual_target_values = [], [], []
     for row in feed_daily:
-        day = row["date"]
-        rec_kg = sum(
-            smart_feed_kg_for_batch(b, day=day) or 0 for b in active_batches
-        )
+        day   = row["date"]
+        rec_kg = sum(smart_feed_kg_for_batch(b, day=day) or 0 for b in active_batches)
         daily_feed_temp_rows.append({
             "date": day,
             "feed_kg": round(float(row["total_feed_kg"]), 2),
-            "temp_c": round(temp_by_day[day], 1) if day in temp_by_day else None,
+            "temp_c":  round(temp_by_day[day], 1) if day in temp_by_day else None,
             "recommended_feed_kg": round(rec_kg, 2) if rec_kg else None,
         })
         target_actual_labels.append(str(day))
@@ -229,34 +232,42 @@ def dashboard(request):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Pond
+# Pond — PUBLIC (read-only)
 # ─────────────────────────────────────────────────────────────────────────────
 
-@login_required
 def pond_list(request):
+    """List all ponds. Open to guests."""
     ponds = Pond.objects.all()
     return render(request, "farm/pond_list.html", {"ponds": ponds})
 
 
-@login_required
 def pond_detail(request, pk):
+    """
+    Pond detail page. Open to guests.
+    Note-adding POST is gated inside the view.
+    """
     pond = get_object_or_404(Pond, pk=pk)
-    batches      = pond.batches.all().prefetch_related("growth_records")
+    batches        = pond.batches.all().prefetch_related("growth_records")
     latest_weather = pond.weather_records.first()
-    pond_notes   = pond.notes.all()[:10]
-    active_alerts = pond.alerts.filter(resolved=False)
+    pond_notes     = pond.notes.all()[:10]
+    active_alerts  = pond.alerts.filter(resolved=False)
+    note_form      = forms.PondNoteForm(initial={"pond": pond})
 
-    note_form = forms.PondNoteForm(initial={"pond": pond})
-
-    if request.method == "POST" and "add_note" in request.POST:
-        note_form = forms.PondNoteForm(request.POST)
-        if note_form.is_valid():
-            note_form.save()
-            messages.success(request, "Note added.")
-            return redirect("farm:pond_detail", pk=pond.pk)
+    if request.method == "POST":
+        # Only authenticated users may add notes
+        if not request.user.is_authenticated:
+            messages.error(request, "Please sign in to add notes.")
+            return redirect("accounts:login")
+        if "add_note" in request.POST:
+            note_form = forms.PondNoteForm(request.POST)
+            if note_form.is_valid():
+                note_form.save()
+                messages.success(request, "Note added.")
+                return redirect("farm:pond_detail", pk=pond.pk)
 
     return render(request, "farm/pond_detail.html", {
-        "pond": pond, "batches": batches,
+        "pond": pond,
+        "batches": batches,
         "latest_weather": latest_weather,
         "pond_notes": pond_notes,
         "active_alerts": active_alerts,
@@ -265,31 +276,37 @@ def pond_detail(request, pk):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Batch detail
+# Batch detail — PUBLIC (read-only)
 # ─────────────────────────────────────────────────────────────────────────────
 
-@login_required
 def batch_detail(request, pk):
-    batch = get_object_or_404(FishBatch, pk=pk)
+    """
+    Batch detail page. Open to guests (read-only).
+    Feed log submission is gated inside the view.
+    """
+    batch          = get_object_or_404(FishBatch, pk=pk)
     growth_records = batch.growth_records.all()
     feed_logs      = batch.feed_logs.all()
     latest_weather = WeatherRecord.objects.filter(pond=batch.pond).order_by("-timestamp").first()
-    today = timezone.now().date()
+    today          = timezone.now().date()
     today_feed_log = feed_logs.filter(date=today).first()
 
-    auto_feed_kg = smart_feed_kg_for_batch(batch)
-    assumed_fcr  = float(getattr(settings, "DEFAULT_FCR", 1.5))
+    auto_feed_kg  = smart_feed_kg_for_batch(batch)
+    assumed_fcr   = float(getattr(settings, "DEFAULT_FCR", 1.5))
     projected_gain_kg = projected_next_avg_weight_g = None
     if auto_feed_kg is not None:
-        projected_gain_kg         = projected_weight_gain_kg(auto_feed_kg, assumed_fcr)
+        projected_gain_kg           = projected_weight_gain_kg(auto_feed_kg, assumed_fcr)
         projected_next_avg_weight_g = projected_avg_weight_g(batch, auto_feed_kg, assumed_fcr)
     ai_prediction = predict_batch_growth(batch, feed_kg=auto_feed_kg)
 
-    mortality_logs = batch.mortality_logs.all()[:10]
+    mortality_logs  = batch.mortality_logs.all()[:10]
     total_mortality = batch.mortality_logs.aggregate(total=Sum("count"))["total"] or 0
-    harvests = batch.harvests.all()
+    harvests        = batch.harvests.all()
 
     if request.method == "POST":
+        if not request.user.is_authenticated:
+            messages.error(request, "Please sign in to log feeding.")
+            return redirect("accounts:login")
         form = forms.FeedLogForm(request.POST, batch=batch, initial_amount_kg=auto_feed_kg)
         if form.is_valid():
             form.save()
@@ -304,112 +321,56 @@ def batch_detail(request, pk):
         form = forms.FeedLogForm(batch=batch, initial_amount_kg=auto_feed_kg)
 
     return render(request, "farm/batch_detail.html", {
-        "batch": batch, "growth_records": growth_records,
-        "feed_logs": feed_logs, "latest_weather": latest_weather,
-        "auto_feed_kg": auto_feed_kg, "assumed_fcr": assumed_fcr,
+        "batch": batch,
+        "growth_records": growth_records,
+        "feed_logs": feed_logs,
+        "latest_weather": latest_weather,
+        "auto_feed_kg": auto_feed_kg,
+        "assumed_fcr": assumed_fcr,
         "projected_gain_kg": projected_gain_kg,
         "projected_next_avg_weight_g": projected_next_avg_weight_g,
-        "ai_prediction": ai_prediction, "today_feed_log": today_feed_log,
+        "ai_prediction": ai_prediction,
+        "today_feed_log": today_feed_log,
         "feed_form": form,
-        "mortality_logs": mortality_logs, "total_mortality": total_mortality,
+        "mortality_logs": mortality_logs,
+        "total_mortality": total_mortality,
         "harvests": harvests,
     })
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Water quality — auto-generate alerts
+# Read-only report views — PUBLIC
 # ─────────────────────────────────────────────────────────────────────────────
 
-@login_required
-def weather_create(request):
-    if request.method == "POST":
-        form = forms.WeatherRecordForm(request.POST)
-        if form.is_valid():
-            record = form.save()
-            _generate_water_alerts(record)          # ← auto alerts
-            messages.success(request, "Water record saved. Alerts checked.")
-            return redirect("farm:dashboard")
-    else:
-        form = forms.WeatherRecordForm()
-    return render(request, "farm/simple_form.html", {"form": form, "title": "Log Water Quality"})
-
-
-@login_required
-def growth_create(request):
-    if request.method == "POST":
-        form = forms.GrowthRecordForm(request.POST)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Growth record saved.")
-            return redirect("farm:dashboard")
-    else:
-        form = forms.GrowthRecordForm()
-    return render(request, "farm/simple_form.html", {"form": form, "title": "Log Growth"})
-
-
-@login_required
-def feed_log_create(request):
-    if request.method == "POST":
-        form = forms.FeedLogForm(request.POST)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Feed log saved.")
-            return redirect("farm:dashboard")
-    else:
-        form = forms.FeedLogForm()
-    return render(request, "farm/simple_form.html", {"form": form, "title": "Log Feed"})
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Reminders & daily report (unchanged)
-# ─────────────────────────────────────────────────────────────────────────────
-
-@login_required
 def reminder_list(request):
+    """Reminders list. Open to guests (read-only)."""
     reminders = FeedingReminder.objects.order_by("scheduled_for")
     return render(request, "farm/reminder_list.html", {"reminders": reminders})
 
 
-@login_required
 def daily_feed_report(request):
-    today = timezone.now().date()
+    """Daily feed suggestion report. Open to guests."""
+    today   = timezone.now().date()
     batches = FishBatch.objects.all().select_related("pond").prefetch_related("growth_records")
-    rows = []
+    rows    = []
     for batch in batches:
-        biomass_kg = batch.latest_biomass_kg
+        biomass_kg     = batch.latest_biomass_kg
         latest_weather = WeatherRecord.objects.filter(pond=batch.pond).order_by("-timestamp").first()
-        temp = latest_weather.water_temp_c if latest_weather else None
-        suggested = smart_feed_kg_for_batch(batch)
-        rows.append({"pond": batch.pond, "batch": batch,
-                     "biomass_kg": biomass_kg, "temperature": temp,
-                     "suggested_feed_kg": suggested})
+        temp           = latest_weather.water_temp_c if latest_weather else None
+        suggested      = smart_feed_kg_for_batch(batch)
+        rows.append({
+            "pond": batch.pond,
+            "batch": batch,
+            "biomass_kg": biomass_kg,
+            "temperature": temp,
+            "suggested_feed_kg": suggested,
+        })
     return render(request, "farm/daily_feed_report.html", {"today": today, "rows": rows})
 
 
-@login_required
-def send_test_alert(request):
-    if request.method != "POST":
-        return redirect("farm:dashboard")
-    try:
-        send_daily_feed_alert.delay()
-        messages.success(request, "Test alert queued successfully.")
-    except Exception:
-        send_daily_feed_alert()
-        messages.warning(request, "Broker unavailable — sent synchronously.")
-    return redirect("farm:dashboard")
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# NEW: Harvest
-# ─────────────────────────────────────────────────────────────────────────────
-
-@login_required
 def harvest_list(request):
-    harvests = HarvestRecord.objects.select_related("batch__pond").all()
-    total_revenue = harvests.aggregate(
-        rev=Sum("price_per_kg")  # computed per-row below
-    )
-    # real revenue needs per-row multiplication; compute in Python
+    """Harvest records. Open to guests (read-only)."""
+    harvests  = HarvestRecord.objects.select_related("batch__pond").all()
     total_rev = sum(h.gross_revenue for h in harvests)
     total_kg  = harvests.aggregate(kg=Sum("total_weight_kg"))["kg"] or 0
     return render(request, "farm/harvest_list.html", {
@@ -419,25 +380,8 @@ def harvest_list(request):
     })
 
 
-@login_required
-def harvest_create(request):
-    if request.method == "POST":
-        form = forms.HarvestRecordForm(request.POST)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Harvest record saved.")
-            return redirect("farm:harvest_list")
-    else:
-        form = forms.HarvestRecordForm()
-    return render(request, "farm/simple_form.html", {"form": form, "title": "Log Harvest"})
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# NEW: Expenses
-# ─────────────────────────────────────────────────────────────────────────────
-
-@login_required
 def expense_list(request):
+    """Expense records. Open to guests (read-only)."""
     expenses = Expense.objects.select_related("pond").all()
     total    = expenses.aggregate(t=Sum("amount"))["t"] or 0
     by_cat   = (
@@ -452,55 +396,10 @@ def expense_list(request):
     })
 
 
-@login_required
-def expense_create(request):
-    if request.method == "POST":
-        form = forms.ExpenseForm(request.POST)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Expense recorded.")
-            return redirect("farm:expense_list")
-    else:
-        form = forms.ExpenseForm()
-    return render(request, "farm/simple_form.html", {"form": form, "title": "Add Expense"})
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# NEW: Mortality log
-# ─────────────────────────────────────────────────────────────────────────────
-
-@login_required
-def mortality_create(request):
-    if request.method == "POST":
-        form = forms.MortalityLogForm(request.POST)
-        if form.is_valid():
-            ml = form.save()
-            # Auto alert if mortality > 50 fish in one event
-            if ml.count > 50:
-                FarmAlert.objects.create(
-                    pond=ml.batch.pond,
-                    alert_type="high_mortality",
-                    level="critical",
-                    message=f"High mortality event: {ml.count} fish lost in {ml.batch} "
-                            f"({ml.get_cause_display()}) on {ml.date}.",
-                )
-            messages.success(request, "Mortality log saved.")
-            return redirect("farm:batch_detail", pk=ml.batch.pk)
-    else:
-        form = forms.MortalityLogForm()
-    return render(request, "farm/simple_form.html", {"form": form, "title": "Log Mortality"})
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# NEW: Alerts centre
-# ─────────────────────────────────────────────────────────────────────────────
-
-@login_required
 def alert_list(request):
-    show_resolved = request.GET.get("resolved") == "1"
-    alerts = FarmAlert.objects.select_related("pond").filter(
-        resolved=show_resolved
-    )
+    """Alert centre. Open to guests (read-only)."""
+    show_resolved    = request.GET.get("resolved") == "1"
+    alerts           = FarmAlert.objects.select_related("pond").filter(resolved=show_resolved)
     unresolved_count = FarmAlert.objects.filter(resolved=False).count()
     return render(request, "farm/alert_list.html", {
         "alerts": alerts,
@@ -509,22 +408,9 @@ def alert_list(request):
     })
 
 
-@require_POST
-def alert_resolve(request, pk):
-    alert = get_object_or_404(FarmAlert, pk=pk)
-    alert.resolve()
-    messages.success(request, "Alert resolved.")
-    return redirect("farm:alert_list")
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# NEW: Profit & Loss report
-# ─────────────────────────────────────────────────────────────────────────────
-
-@login_required
 def profit_loss_report(request):
-    today = timezone.now().date()
-    # default: current month
+    """Profit & Loss report. Open to guests."""
+    today     = timezone.now().date()
     month_str = request.GET.get("month", today.strftime("%Y-%m"))
     try:
         year, month = int(month_str.split("-")[0]), int(month_str.split("-")[1])
@@ -532,63 +418,47 @@ def profit_loss_report(request):
         year, month = today.year, today.month
 
     start = date(year, month, 1)
-    if month == 12:
-        end = date(year + 1, 1, 1)
-    else:
-        end = date(year, month + 1, 1)
+    end   = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
 
-    # Revenue from harvests
-    harvests_qs = HarvestRecord.objects.filter(
+    harvests_qs  = HarvestRecord.objects.filter(
         harvest_date__gte=start, harvest_date__lt=end
     ).select_related("batch__pond")
-    revenue = sum(h.gross_revenue for h in harvests_qs)
+    revenue      = sum(h.gross_revenue for h in harvests_qs)
 
-    # Expenses
-    expenses_qs = Expense.objects.filter(date__gte=start, date__lt=end)
+    expenses_qs  = Expense.objects.filter(date__gte=start, date__lt=end)
     total_expense = float(expenses_qs.aggregate(t=Sum("amount"))["t"] or 0)
 
-    # Feed cost from feed logs
-    feed_qs = FeedLog.objects.filter(date__gte=start, date__lt=end)
-    feed_kg = float(feed_qs.aggregate(kg=Sum("feed_amount_kg"))["kg"] or 0)
+    feed_qs      = FeedLog.objects.filter(date__gte=start, date__lt=end)
+    feed_kg      = float(feed_qs.aggregate(kg=Sum("feed_amount_kg"))["kg"] or 0)
     feed_cost_per_kg = float(getattr(settings, "FEED_COST_PER_KG", 1.2))
-    feed_cost = round(feed_kg * feed_cost_per_kg, 2)
+    feed_cost    = round(feed_kg * feed_cost_per_kg, 2)
 
-    total_cost = round(total_expense + feed_cost, 2)
-    net_profit = round(revenue - total_cost, 2)
-    margin_pct = round((net_profit / revenue * 100) if revenue > 0 else 0, 1)
+    total_cost   = round(total_expense + feed_cost, 2)
+    net_profit   = round(revenue - total_cost, 2)
+    margin_pct   = round((net_profit / revenue * 100) if revenue > 0 else 0, 1)
 
-    by_category = list(
+    by_category  = list(
         expenses_qs.values("category")
         .annotate(total=Sum("amount"))
         .order_by("-total")
     )
 
-    # Monthly trend (last 6 months)
     monthly_trend = []
     for i in range(5, -1, -1):
         m_start = (today.replace(day=1) - timedelta(days=i * 30)).replace(day=1)
-        if m_start.month == 12:
-            m_end = date(m_start.year + 1, 1, 1)
-        else:
-            m_end = date(m_start.year, m_start.month + 1, 1)
-        m_rev = sum(
+        m_end   = date(m_start.year + 1, 1, 1) if m_start.month == 12 else date(m_start.year, m_start.month + 1, 1)
+        m_rev   = sum(
             h.gross_revenue for h in
             HarvestRecord.objects.filter(harvest_date__gte=m_start, harvest_date__lt=m_end)
         )
-        m_exp = float(
-            Expense.objects.filter(date__gte=m_start, date__lt=m_end)
-            .aggregate(t=Sum("amount"))["t"] or 0
-        )
-        m_feed_kg = float(
-            FeedLog.objects.filter(date__gte=m_start, date__lt=m_end)
-            .aggregate(kg=Sum("feed_amount_kg"))["kg"] or 0
-        )
-        m_total_cost = round(m_exp + m_feed_kg * feed_cost_per_kg, 2)
+        m_exp   = float(Expense.objects.filter(date__gte=m_start, date__lt=m_end).aggregate(t=Sum("amount"))["t"] or 0)
+        m_feed  = float(FeedLog.objects.filter(date__gte=m_start, date__lt=m_end).aggregate(kg=Sum("feed_amount_kg"))["kg"] or 0)
+        m_cost  = round(m_exp + m_feed * feed_cost_per_kg, 2)
         monthly_trend.append({
-            "label": m_start.strftime("%b %Y"),
+            "label":   m_start.strftime("%b %Y"),
             "revenue": round(m_rev, 2),
-            "cost": m_total_cost,
-            "profit": round(m_rev - m_total_cost, 2),
+            "cost":    m_cost,
+            "profit":  round(m_rev - m_cost, 2),
         })
 
     return render(request, "farm/profit_loss.html", {
@@ -606,3 +476,124 @@ def profit_loss_report(request):
         "by_category": by_category,
         "monthly_trend": monthly_trend,
     })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Write views — LOGIN REQUIRED
+# ─────────────────────────────────────────────────────────────────────────────
+
+@login_required
+def weather_create(request):
+    """Log water quality. Requires login."""
+    if request.method == "POST":
+        form = forms.WeatherRecordForm(request.POST)
+        if form.is_valid():
+            record = form.save()
+            _generate_water_alerts(record)
+            messages.success(request, "Water record saved. Alerts checked.")
+            return redirect("farm:dashboard")
+    else:
+        form = forms.WeatherRecordForm()
+    return render(request, "farm/simple_form.html", {"form": form, "title": "Log Water Quality"})
+
+
+@login_required
+def growth_create(request):
+    """Log growth record. Requires login."""
+    if request.method == "POST":
+        form = forms.GrowthRecordForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Growth record saved.")
+            return redirect("farm:dashboard")
+    else:
+        form = forms.GrowthRecordForm()
+    return render(request, "farm/simple_form.html", {"form": form, "title": "Log Growth"})
+
+
+@login_required
+def feed_log_create(request):
+    """Log feeding. Requires login."""
+    if request.method == "POST":
+        form = forms.FeedLogForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Feed log saved.")
+            return redirect("farm:dashboard")
+    else:
+        form = forms.FeedLogForm()
+    return render(request, "farm/simple_form.html", {"form": form, "title": "Log Feed"})
+
+
+@login_required
+def harvest_create(request):
+    """Log harvest. Requires login."""
+    if request.method == "POST":
+        form = forms.HarvestRecordForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Harvest record saved.")
+            return redirect("farm:harvest_list")
+    else:
+        form = forms.HarvestRecordForm()
+    return render(request, "farm/simple_form.html", {"form": form, "title": "Log Harvest"})
+
+
+@login_required
+def expense_create(request):
+    """Add expense. Requires login."""
+    if request.method == "POST":
+        form = forms.ExpenseForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Expense recorded.")
+            return redirect("farm:expense_list")
+    else:
+        form = forms.ExpenseForm()
+    return render(request, "farm/simple_form.html", {"form": form, "title": "Add Expense"})
+
+
+@login_required
+def mortality_create(request):
+    """Log mortality. Requires login."""
+    if request.method == "POST":
+        form = forms.MortalityLogForm(request.POST)
+        if form.is_valid():
+            ml = form.save()
+            if ml.count > 50:
+                FarmAlert.objects.create(
+                    pond=ml.batch.pond,
+                    alert_type="high_mortality",
+                    level="critical",
+                    message=f"High mortality event: {ml.count} fish lost in {ml.batch} "
+                            f"({ml.get_cause_display()}) on {ml.date}.",
+                )
+            messages.success(request, "Mortality log saved.")
+            return redirect("farm:batch_detail", pk=ml.batch.pk)
+    else:
+        form = forms.MortalityLogForm()
+    return render(request, "farm/simple_form.html", {"form": form, "title": "Log Mortality"})
+
+
+@require_POST
+@login_required
+def alert_resolve(request, pk):
+    """Resolve an alert. Requires login."""
+    alert = get_object_or_404(FarmAlert, pk=pk)
+    alert.resolve()
+    messages.success(request, "Alert resolved.")
+    return redirect("farm:alert_list")
+
+
+@login_required
+def send_test_alert(request):
+    """Queue a test Celery alert. Requires login."""
+    if request.method != "POST":
+        return redirect("farm:dashboard")
+    try:
+        send_daily_feed_alert.delay()
+        messages.success(request, "Test alert queued successfully.")
+    except Exception:
+        send_daily_feed_alert()
+        messages.warning(request, "Broker unavailable — sent synchronously.")
+    return redirect("farm:dashboard")

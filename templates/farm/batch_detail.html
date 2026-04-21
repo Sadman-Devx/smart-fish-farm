@@ -4,8 +4,10 @@
 
 {% block topbar_actions %}
   <a href="{% url 'farm:pond_detail' batch.pond.pk %}" class="btn btn-sm">← {{ batch.pond.name }}</a>
-  <a href="{% url 'farm:weather_create' %}" class="btn btn-sm">+ Weather</a>
-  <a href="{% url 'farm:growth_create' %}" class="btn btn-sm">+ Growth</a>
+  {% if request.user.is_authenticated %}
+    <a href="{% url 'farm:weather_create' %}" class="btn btn-sm">+ Weather</a>
+    <a href="{% url 'farm:growth_create' %}"  class="btn btn-sm">+ Growth</a>
+  {% endif %}
 {% endblock %}
 
 {% block content %}
@@ -16,7 +18,7 @@
   </div>
 </div>
 
-{# ── Alerts ──────────────────────────────────────────────── #}
+{# ── Info / alerts ─────────────────────────────────────── #}
 {% if not auto_feed_kg %}
 <div class="alert-strip alert-strip-info">
   ℹ Add growth records and weather data to unlock automatic feed calculation.
@@ -24,12 +26,12 @@
 {% endif %}
 {% if ai_prediction and ai_prediction.estimated_days_to_market <= 7 %}
 <div class="alert-strip alert-strip-danger">
-  ⚠ Harvest target in <strong>{{ ai_prediction.estimated_days_to_market }} days</strong> (est. {{ ai_prediction.estimated_harvest_date }}).
-  Plan harvest logistics now.
+  ⚠ Harvest target in <strong>{{ ai_prediction.estimated_days_to_market }} days</strong>
+  (est. {{ ai_prediction.estimated_harvest_date }}). Plan harvest logistics now.
 </div>
 {% endif %}
 
-{# ── Top stat row ─────────────────────────────────────────── #}
+{# ── KPI row ──────────────────────────────────────────── #}
 <div class="kpi-grid">
   <div class="kpi-card k-teal">
     <div class="kpi-label">Biomass</div>
@@ -69,7 +71,7 @@
   {% endif %}
 </div>
 
-{# ── Feed form + AI prediction ────────────────────────────── #}
+{# ── Feed form (auth only) + AI prediction ─────────────── #}
 <div class="row-2">
 
   <div class="card">
@@ -78,19 +80,39 @@
       {% if today_feed_log %}<span class="badge badge-success">✓ Logged today</span>{% endif %}
     </div>
     <div class="card-body">
-      <form method="post" style="display:flex;flex-direction:column;gap:12px">
-        {% csrf_token %}
-        {{ feed_form.non_field_errors }}
-        {% for field in feed_form %}
-          <div>
-            <label class="form-label">{{ field.label }}</label>
-            {{ field }}
-            {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
-            {% for error in field.errors %}<div class="fs-xs text-danger" style="margin-top:4px">{{ error }}</div>{% endfor %}
+      {% if request.user.is_authenticated %}
+        <form method="post" style="display:flex;flex-direction:column;gap:12px">
+          {% csrf_token %}
+          {{ feed_form.non_field_errors }}
+          {% for field in feed_form %}
+            <div>
+              <label class="form-label">{{ field.label }}</label>
+              {{ field }}
+              {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+              {% for error in field.errors %}<div class="fs-xs text-danger" style="margin-top:4px">{{ error }}</div>{% endfor %}
+            </div>
+          {% endfor %}
+          <button type="submit" class="btn btn-accent" style="margin-top:4px">Save Feeding Log</button>
+        </form>
+      {% else %}
+        {# Guest placeholder — shows the suggested amount but no form #}
+        {% if auto_feed_kg %}
+        <div style="padding:14px;background:var(--surface2);border-radius:8px;margin-bottom:14px">
+          <div class="fs-xs text-muted" style="margin-bottom:4px">Suggested feed amount</div>
+          <div style="font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:var(--accent)">
+            {{ auto_feed_kg|floatformat:2 }} kg
           </div>
-        {% endfor %}
-        <button type="submit" class="btn btn-accent" style="margin-top:4px">Save Feeding Log</button>
-      </form>
+        </div>
+        {% endif %}
+        <div style="text-align:center;padding:16px 0">
+          <div style="font-size:28px;margin-bottom:8px">🔒</div>
+          <p class="fs-sm text-muted" style="margin-bottom:14px">Sign in to log feeding records.</p>
+          <div style="display:flex;gap:8px;justify-content:center">
+            <a href="{% url 'accounts:login' %}"    class="btn btn-sm">Sign In</a>
+            <a href="{% url 'accounts:register' %}" class="btn btn-accent btn-sm">Create Account</a>
+          </div>
+        </div>
+      {% endif %}
     </div>
   </div>
 
@@ -132,7 +154,7 @@
           </div>
         </div>
       </div>
-      {% if auto_feed_kg %}
+      {% if auto_feed_kg and request.user.is_authenticated %}
       <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
         <div class="sensor-row" style="padding:6px 0">
           <span class="sensor-label">Projected weight gain</span>
@@ -150,22 +172,20 @@
 
 </div>
 
-{# ── Growth records + Feed history ────────────────────────── #}
+{# ── Growth records + Feed history ─────────────────────── #}
 <div class="row-2">
   <div class="card">
     <div class="card-header">
       <span class="card-title">Growth Records</span>
-      <a href="{% url 'farm:growth_create' %}" class="btn btn-sm">+ Add</a>
+      {% if request.user.is_authenticated %}
+        <a href="{% url 'farm:growth_create' %}" class="btn btn-sm">+ Add</a>
+      {% endif %}
     </div>
     {% if growth_records %}
     <div class="table-responsive">
       <table class="table">
         <thead>
-          <tr>
-            <th>Date</th>
-            <th class="text-end">Count</th>
-            <th class="text-end">Avg Weight (g)</th>
-          </tr>
+          <tr><th>Date</th><th class="text-end">Count</th><th class="text-end">Avg Weight (g)</th></tr>
         </thead>
         <tbody>
           {% for gr in growth_records %}
@@ -184,18 +204,12 @@
   </div>
 
   <div class="card">
-    <div class="card-header">
-      <span class="card-title">Feeding History</span>
-    </div>
+    <div class="card-header"><span class="card-title">Feeding History</span></div>
     {% if feed_logs %}
     <div class="table-responsive">
       <table class="table">
         <thead>
-          <tr>
-            <th>Date</th>
-            <th class="text-end">Feed (kg)</th>
-            <th class="text-end">Mode</th>
-          </tr>
+          <tr><th>Date</th><th class="text-end">Feed (kg)</th><th class="text-end">Mode</th></tr>
         </thead>
         <tbody>
           {% for log in feed_logs %}

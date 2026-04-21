@@ -5,18 +5,23 @@
 
 {% block topbar_actions %}
   <a href="{% url 'farm:daily_feed_report' %}" class="btn btn-sm">Daily Report</a>
-  <form method="post" action="{% url 'farm:send_test_alert' %}" style="display:inline;margin:0">
-    {% csrf_token %}
-    <button type="submit" class="btn btn-sm">Send Alert</button>
-  </form>
-  <a href="{% url 'farm:weather_create' %}" class="btn btn-sm">+ Weather</a>
-  <a href="{% url 'farm:growth_create' %}" class="btn btn-sm">+ Growth</a>
-  <a href="{% url 'farm:feed_log_create' %}" class="btn btn-accent btn-sm">+ Feed Log</a>
+  {% if request.user.is_authenticated %}
+    <form method="post" action="{% url 'farm:send_test_alert' %}" style="display:inline;margin:0">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-sm">Send Alert</button>
+    </form>
+    <a href="{% url 'farm:weather_create' %}" class="btn btn-sm">+ Weather</a>
+    <a href="{% url 'farm:growth_create' %}"  class="btn btn-sm">+ Growth</a>
+    <a href="{% url 'farm:feed_log_create' %}" class="btn btn-accent btn-sm">+ Feed Log</a>
+  {% else %}
+    <a href="{% url 'accounts:login' %}"    class="btn btn-sm">Sign In</a>
+    <a href="{% url 'accounts:register' %}" class="btn btn-accent btn-sm">Register</a>
+  {% endif %}
 {% endblock %}
 
 {% block content %}
 
-{# ── Weather bar ────────────────────────────────────────────── #}
+{# ── Weather bar ──────────────────────────────────────── #}
 {% if daily_api_temp_c %}
 <div class="weather-bar">
   <div class="weather-left">
@@ -30,14 +35,11 @@
         <span class="text-muted fs-sm" style="white-space:nowrap">{{ daily_api_condition }}</span>
       </div>
     </div>
-
     <div class="weather-divider"></div>
-
     <div class="weather-detail">
       <strong>API Feed Rate</strong>
       {{ daily_api_feed_percent|floatformat:0 }}% of biomass
     </div>
-
     {% if avg_recent_temp_c %}
     <div class="weather-divider"></div>
     <div class="weather-detail">
@@ -46,7 +48,6 @@
     </div>
     {% endif %}
   </div>
-
   <div class="weather-tags">
     {% with temp=daily_api_temp_c|floatformat:0 %}
       {% if temp >= "28" %}
@@ -62,8 +63,8 @@
 </div>
 {% endif %}
 
-{# ── Pending reminders alert ─────────────────────────────────── #}
-{% if reminders_today %}
+{# ── Reminder alert (auth users only) ─────────────────── #}
+{% if request.user.is_authenticated and reminders_today %}
 <div class="alert-strip">
   <span style="font-size:16px;flex-shrink:0">⚠</span>
   <span><strong>{{ reminders_today }} feeding reminder{{ reminders_today|pluralize }}</strong> pending today</span>
@@ -71,7 +72,7 @@
 </div>
 {% endif %}
 
-{# ── KPI cards ──────────────────────────────────────────────── #}
+{# ── KPI cards ──────────────────────────────────────────── #}
 <div class="kpi-grid">
   <div class="kpi-card k-teal">
     <div class="kpi-label">Total Ponds</div>
@@ -107,7 +108,7 @@
   {% endif %}
 </div>
 
-{# ── Active Batches + Reminders ──────────────────────────────── #}
+{# ── Active Batches + Reminders ─────────────────────────── #}
 <div style="display:grid;grid-template-columns:1fr 340px;gap:16px">
 
   <div class="card">
@@ -151,17 +152,23 @@
       <span class="pill pill-warn">{{ reminders_today }}</span>
     </div>
     <div class="card-body" style="padding:12px 14px">
-      {% for reminder in pending_reminders %}
-        <div class="reminder-item">
-          <div class="reminder-dot"></div>
-          <div>
-            <div class="reminder-text">{{ reminder.batch }}</div>
-            <div class="reminder-meta">{{ reminder.scheduled_for|date:"H:i" }} · {{ reminder.message|truncatechars:48 }}</div>
+      {% if request.user.is_authenticated %}
+        {% for reminder in pending_reminders %}
+          <div class="reminder-item">
+            <div class="reminder-dot"></div>
+            <div>
+              <div class="reminder-text">{{ reminder.batch }}</div>
+              <div class="reminder-meta">{{ reminder.scheduled_for|date:"H:i" }} · {{ reminder.message|truncatechars:48 }}</div>
+            </div>
           </div>
-        </div>
-      {% empty %}
-        <p class="text-muted fs-xs" style="padding:4px 0">No reminders for today.</p>
-      {% endfor %}
+        {% empty %}
+          <p class="text-muted fs-xs" style="padding:4px 0">No reminders for today.</p>
+        {% endfor %}
+      {% else %}
+        <p class="text-muted fs-xs" style="padding:4px 0">
+          <a href="{% url 'accounts:login' %}" style="color:var(--accent2)">Sign in</a> to view your reminders.
+        </p>
+      {% endif %}
       <div style="margin-top:12px">
         <a href="{% url 'farm:reminder_list' %}" class="btn btn-sm btn-outline" style="width:100%;justify-content:center">View all reminders</a>
       </div>
@@ -170,7 +177,7 @@
 
 </div>
 
-{# ── Ponds grid ─────────────────────────────────────────────── #}
+{# ── Ponds grid ─────────────────────────────────────────── #}
 <div>
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
     <span class="card-title" style="font-size:15px">Ponds</span>
@@ -197,7 +204,7 @@
   </div>
 </div>
 
-{# ── Daily Feed & Temperature table ─────────────────────────── #}
+{# ── Daily Feed & Temperature table ─────────────────────── #}
 <div class="card">
   <div class="card-header">
     <span class="card-title">Daily Feed & Temperature (Last 14 Days)</span>
@@ -244,30 +251,27 @@
   {% endif %}
 </div>
 
-{# ── Recent Feed log ─────────────────────────────────────────── #}
+{# ── Recent Feed log ─────────────────────────────────────── #}
 <div class="card">
   <div class="card-header">
     <span class="card-title">Recent Feeding (Last 7 Logs)</span>
-    <a href="{% url 'farm:feed_log_create' %}" class="btn btn-sm btn-accent">+ Log Feed</a>
+    {% if request.user.is_authenticated %}
+      <a href="{% url 'farm:feed_log_create' %}" class="btn btn-sm btn-accent">+ Log Feed</a>
+    {% else %}
+      <a href="{% url 'accounts:login' %}" class="btn btn-sm" style="opacity:.6">🔒 Log Feed</a>
+    {% endif %}
   </div>
   {% if recent_feed %}
   <div class="table-responsive">
     <table class="table">
       <thead>
-        <tr>
-          <th>Date</th>
-          <th>Batch</th>
-          <th class="text-end">Feed (kg)</th>
-          <th class="text-end">Mode</th>
-        </tr>
+        <tr><th>Date</th><th>Batch</th><th class="text-end">Feed (kg)</th><th class="text-end">Mode</th></tr>
       </thead>
       <tbody>
         {% for log in recent_feed %}
         <tr>
           <td class="text-muted fs-sm">{{ log.date }}</td>
-          <td>
-            <a href="{% url 'farm:batch_detail' log.batch.pk %}" style="color:var(--accent2)">{{ log.batch }}</a>
-          </td>
+          <td><a href="{% url 'farm:batch_detail' log.batch.pk %}" style="color:var(--accent2)">{{ log.batch }}</a></td>
           <td class="text-end fw-bold">{{ log.feed_amount_kg }}</td>
           <td class="text-end">
             {% if log.auto_calculated %}
@@ -286,7 +290,7 @@
   {% endif %}
 </div>
 
-{# ── Charts ──────────────────────────────────────────────────── #}
+{# ── Charts ─────────────────────────────────────────────── #}
 <div>
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
     <span class="card-title" style="font-size:15px">Analytics</span>
@@ -318,7 +322,6 @@
   </div>
 </div>
 
-{# ── JSON for charts ────────────────────────────────────────── #}
 {{ biomass_labels|json_script:"biomass-labels" }}
 {{ biomass_values|json_script:"biomass-values" }}
 {{ mortality_labels|json_script:"mortality-labels" }}
@@ -336,89 +339,31 @@
 {% block extra_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-Chart.defaults.color        = '#7a95b8';
-Chart.defaults.borderColor  = '#1f3356';
-Chart.defaults.font.family  = "'Space Grotesk', system-ui, sans-serif";
-
+Chart.defaults.color       = '#7a95b8';
+Chart.defaults.borderColor = '#1f3356';
+Chart.defaults.font.family = "'Space Grotesk', system-ui, sans-serif";
 function safeJson(id){ try{ return JSON.parse(document.getElementById(id).textContent); }catch(e){ return []; } }
-
-var biomassLabels          = safeJson('biomass-labels');
-var biomassValues          = safeJson('biomass-values');
-var mortalityLabels        = safeJson('mortality-labels');
-var mortalityValues        = safeJson('mortality-values');
-var feedCostLabels         = safeJson('feed-cost-labels');
-var feedConsumptionValues  = safeJson('feed-consumption-values');
-var weatherLabels          = safeJson('weather-labels');
-var weatherTempValues      = safeJson('weather-temp-values');
-var targetActualLabels     = safeJson('target-actual-labels');
-var targetActualActual     = safeJson('target-actual-actual-values');
-var targetActualTarget     = safeJson('target-actual-target-values');
-
-function gradient(ctx, c1, c2){
-  var g = ctx.createLinearGradient(0,0,0,200);
-  g.addColorStop(0, c1); g.addColorStop(1, c2); return g;
-}
-
-// Biomass bar
-(function(){
-  var ctx = document.getElementById('biomassChart');
-  if(!ctx) return;
-  var g = ctx.getContext('2d');
-  new Chart(ctx,{type:'bar',data:{labels:biomassLabels,datasets:[{
-    label:'Biomass (kg)',data:biomassValues,
-    backgroundColor:gradient(g,'rgba(0,229,180,.8)','rgba(0,184,255,.4)'),
-    borderRadius:6,borderSkipped:false
-  }]},options:{responsive:true,maintainAspectRatio:false,
-    plugins:{legend:{display:false}},
-    scales:{x:{ticks:{maxRotation:30,font:{size:10}}},y:{grid:{color:'#1f3356'}}}}});
-})();
-
-// Feed consumption line
-(function(){
-  var ctx = document.getElementById('feedConsumptionChart');
-  if(!ctx) return;
-  new Chart(ctx,{type:'line',data:{labels:feedCostLabels,datasets:[{
-    label:'Feed (kg)',data:feedConsumptionValues,tension:0.35,
-    borderColor:'#00b8ff',backgroundColor:'rgba(0,184,255,.08)',fill:true,pointRadius:3,pointHoverRadius:5
-  }]},options:{responsive:true,maintainAspectRatio:false,
-    plugins:{legend:{display:false}},
-    scales:{y:{grid:{color:'#1f3356'}}}}});
-})();
-
-// Weather temp line
-(function(){
-  var ctx = document.getElementById('weatherTrendChart');
-  if(!ctx) return;
-  new Chart(ctx,{type:'line',data:{labels:weatherLabels,datasets:[{
-    label:'Water Temp (°C)',data:weatherTempValues,tension:0.35,
-    borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,.08)',fill:true,pointRadius:3,pointHoverRadius:5
-  }]},options:{responsive:true,maintainAspectRatio:false,
-    plugins:{legend:{display:false}},
-    scales:{y:{grid:{color:'#1f3356'}}}}});
-})();
-
-// Target vs actual
-(function(){
-  var ctx = document.getElementById('targetActualChart');
-  if(!ctx) return;
-  new Chart(ctx,{type:'line',data:{labels:targetActualLabels,datasets:[
-    {label:'Actual (kg)',data:targetActualActual,tension:0.28,borderColor:'#00b8ff',pointRadius:3},
-    {label:'Recommended (kg)',data:targetActualTarget,tension:0.28,borderColor:'#ff6b35',borderDash:[6,4],pointRadius:2}
-  ]},options:{responsive:true,maintainAspectRatio:false,
-    plugins:{legend:{labels:{color:'#7a95b8',font:{size:11}}}},
-    scales:{y:{grid:{color:'#1f3356'}}}}});
-})();
-
-// Mortality
-(function(){
-  var ctx = document.getElementById('mortalityChart');
-  if(!ctx) return;
-  new Chart(ctx,{type:'line',data:{labels:mortalityLabels,datasets:[{
-    label:'Mortality (%)',data:mortalityValues,tension:0.32,
-    borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.08)',fill:true,pointRadius:3,pointHoverRadius:5
-  }]},options:{responsive:true,maintainAspectRatio:false,
-    plugins:{legend:{display:false}},
-    scales:{y:{grid:{color:'#1f3356'}}}}});
-})();
+var biomassLabels         = safeJson('biomass-labels');
+var biomassValues         = safeJson('biomass-values');
+var mortalityLabels       = safeJson('mortality-labels');
+var mortalityValues       = safeJson('mortality-values');
+var feedCostLabels        = safeJson('feed-cost-labels');
+var feedConsumptionValues = safeJson('feed-consumption-values');
+var weatherLabels         = safeJson('weather-labels');
+var weatherTempValues     = safeJson('weather-temp-values');
+var targetActualLabels    = safeJson('target-actual-labels');
+var targetActualActual    = safeJson('target-actual-actual-values');
+var targetActualTarget    = safeJson('target-actual-target-values');
+function gradient(ctx,c1,c2){ var g=ctx.createLinearGradient(0,0,0,200); g.addColorStop(0,c1); g.addColorStop(1,c2); return g; }
+(function(){ var ctx=document.getElementById('biomassChart'); if(!ctx)return; var g=ctx.getContext('2d');
+  new Chart(ctx,{type:'bar',data:{labels:biomassLabels,datasets:[{label:'Biomass (kg)',data:biomassValues,backgroundColor:gradient(g,'rgba(0,229,180,.8)','rgba(0,184,255,.4)'),borderRadius:6,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{maxRotation:30,font:{size:10}}},y:{grid:{color:'#1f3356'}}}}});})();
+(function(){ var ctx=document.getElementById('feedConsumptionChart'); if(!ctx)return;
+  new Chart(ctx,{type:'line',data:{labels:feedCostLabels,datasets:[{label:'Feed (kg)',data:feedConsumptionValues,tension:0.35,borderColor:'#00b8ff',backgroundColor:'rgba(0,184,255,.08)',fill:true,pointRadius:3,pointHoverRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{grid:{color:'#1f3356'}}}}});})();
+(function(){ var ctx=document.getElementById('weatherTrendChart'); if(!ctx)return;
+  new Chart(ctx,{type:'line',data:{labels:weatherLabels,datasets:[{label:'Water Temp (°C)',data:weatherTempValues,tension:0.35,borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,.08)',fill:true,pointRadius:3,pointHoverRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{grid:{color:'#1f3356'}}}}});})();
+(function(){ var ctx=document.getElementById('targetActualChart'); if(!ctx)return;
+  new Chart(ctx,{type:'line',data:{labels:targetActualLabels,datasets:[{label:'Actual (kg)',data:targetActualActual,tension:0.28,borderColor:'#00b8ff',pointRadius:3},{label:'Recommended (kg)',data:targetActualTarget,tension:0.28,borderColor:'#ff6b35',borderDash:[6,4],pointRadius:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#7a95b8',font:{size:11}}}},scales:{y:{grid:{color:'#1f3356'}}}}});})();
+(function(){ var ctx=document.getElementById('mortalityChart'); if(!ctx)return;
+  new Chart(ctx,{type:'line',data:{labels:mortalityLabels,datasets:[{label:'Mortality (%)',data:mortalityValues,tension:0.32,borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.08)',fill:true,pointRadius:3,pointHoverRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{grid:{color:'#1f3356'}}}}});})();
 </script>
 {% endblock %}
