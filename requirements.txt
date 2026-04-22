@@ -7,3 +7,4 @@ twilio
 djangorestframework
 python-dotenv
 django-allauth==65.3.0
+pip install crytography
