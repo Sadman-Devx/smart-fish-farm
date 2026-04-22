@@ -111,7 +111,7 @@ LOGOUT_REDIRECT_URL = '/accounts/login/'
 
 
 # ── django-allauth ─────────────────────────────────────────────────────────────
-SITE_ID = 1
+SITE_ID = 2
 
 # ── FIX: replaces deprecated ACCOUNT_EMAIL_REQUIRED + ACCOUNT_USERNAME_REQUIRED
 # These two old settings caused the startup WARNING in the terminal.

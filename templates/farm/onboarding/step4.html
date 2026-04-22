@@ -1,0 +1,197 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Weather Integration — AquaSmart</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <style>
+    body { background: var(--bg); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .ob-wrap { width: 100%; max-width: 560px; }
+    .ob-progress { margin-bottom: 32px; }
+    .ob-steps { display: flex; gap: 8px; margin-bottom: 10px; }
+    .ob-step-dot { flex: 1; height: 4px; border-radius: 2px; background: var(--surface3); }
+    .ob-step-dot.done   { background: var(--success); }
+    .ob-step-dot.active { background: var(--accent); }
+    .ob-progress-label { font-size: 11px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+    .ob-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 36px; box-shadow: 0 24px 64px rgba(0,0,0,.35); }
+    .ob-icon  { font-size: 36px; margin-bottom: 12px; }
+    .ob-title { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; color: var(--text); margin-bottom: 4px; }
+    .ob-subtitle { font-size: 13px; color: var(--muted); margin-bottom: 28px; }
+
+    /* Weather card */
+    .weather-display {
+      background: linear-gradient(135deg, rgba(0,229,180,.1), rgba(0,184,255,.06));
+      border: 1px solid rgba(0,229,180,.25);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .weather-location {
+      font-size: 11px; color: var(--muted); text-transform: uppercase;
+      letter-spacing: .06em; margin-bottom: 12px;
+    }
+    .weather-main { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+    .weather-temp-big {
+      font-family: 'Syne', sans-serif;
+      font-size: 48px; font-weight: 800;
+      color: var(--accent); line-height: 1;
+    }
+    .weather-condition-text { font-size: 16px; color: var(--text); font-weight: 600; }
+    .weather-emoji { font-size: 40px; }
+    .weather-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .weather-stat {
+      background: var(--surface2); border-radius: 8px; padding: 12px;
+    }
+    .weather-stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+    .weather-stat-value { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 800; color: var(--text); }
+
+    /* No API key warning */
+    .no-weather {
+      background: rgba(245,158,11,.08);
+      border: 1px solid rgba(245,158,11,.25);
+      border-radius: 10px;
+      padding: 16px 18px;
+      font-size: 13px;
+      color: var(--warn);
+      margin-bottom: 20px;
+    }
+    .no-weather strong { display: block; margin-bottom: 4px; font-size: 14px; }
+    .no-weather code {
+      background: var(--surface3); border-radius: 4px;
+      padding: 1px 6px; font-size: 12px; color: var(--accent2);
+    }
+
+    /* Profile summary */
+    .summary-box {
+      background: var(--surface2); border-radius: 10px;
+      padding: 16px; margin-bottom: 20px;
+    }
+    .summary-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px; }
+    .summary-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .summary-row:last-child { border-bottom: none; }
+    .summary-key { color: var(--muted); }
+    .summary-val { color: var(--text); font-weight: 600; }
+
+    /* Actions */
+    .ob-actions { display: flex; align-items: center; gap: 12px; margin-top: 24px; }
+    .btn-ob-finish {
+      flex: 1; padding: 14px;
+      background: var(--accent); color: #0a1628;
+      font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 800;
+      border: none; border-radius: 9px; cursor: pointer; transition: opacity .15s;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-ob-finish:hover { opacity: .88; }
+    .btn-ob-back { padding: 14px 18px; background: var(--surface2); color: var(--muted); font-family: 'Space Grotesk', sans-serif; font-size: 13px; font-weight: 500; border: 1px solid var(--border); border-radius: 9px; cursor: pointer; text-decoration: none; transition: all .15s; }
+    .btn-ob-back:hover { color: var(--text); border-color: var(--accent2); }
+
+    @media (max-width: 600px) { .ob-card { padding: 24px 18px; } }
+  </style>
+</head>
+<body>
+<div class="ob-wrap">
+
+  <div class="ob-progress">
+    <div class="ob-steps">
+      {% for i in "1234" %}{% with n=forloop.counter %}
+        <div class="ob-step-dot {% if n < current_step %}done{% elif n == current_step %}active{% endif %}"></div>
+      {% endwith %}{% endfor %}
+    </div>
+    <div class="ob-progress-label">Step {{ current_step }} of {{ total_steps }} — {{ step_title }}</div>
+  </div>
+
+  <div class="ob-card">
+    <div class="ob-icon">🌤</div>
+    <div class="ob-title">{{ step_title }}</div>
+    <div class="ob-subtitle">{{ step_subtitle }}</div>
+
+    {# ── Weather result ── #}
+    {% if weather.success %}
+    <div class="weather-display">
+      <div class="weather-location">📍 {{ location_label }}</div>
+      <div class="weather-main">
+        <div class="weather-emoji">
+          {% if "Rain" in weather.condition %}🌧
+          {% elif "Cloud" in weather.condition %}⛅
+          {% elif "Storm" in weather.condition %}⛈
+          {% elif "Clear" in weather.condition %}☀️
+          {% else %}🌤{% endif %}
+        </div>
+        <div>
+          <div class="weather-temp-big">{{ weather.temp_c }}°C</div>
+          <div class="weather-condition-text">{{ weather.condition }}</div>
+        </div>
+      </div>
+      <div class="weather-stats">
+        <div class="weather-stat">
+          <div class="weather-stat-label">Humidity</div>
+          <div class="weather-stat-value">{{ weather.humidity }}%</div>
+        </div>
+        <div class="weather-stat">
+          <div class="weather-stat-label">Rain (1h)</div>
+          <div class="weather-stat-value">{{ weather.rain_mm }} mm</div>
+        </div>
+      </div>
+    </div>
+
+    {% else %}
+    <div class="no-weather">
+      <strong>⚠ Weather data unavailable</strong>
+      {% if weather.error == "no_api_key" %}
+        Add your OpenWeatherMap API key to <code>.env</code> as
+        <code>OPENWEATHER_API_KEY=your_key_here</code> to enable live weather.
+        Weather data will be fetched automatically once the key is set.
+      {% else %}
+        Could not fetch weather right now ({{ weather.error }}).
+        This won't affect your farm management — you can log weather conditions manually.
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {# ── Profile summary ── #}
+    <div class="summary-box">
+      <div class="summary-title">Your farm profile summary</div>
+      <div class="summary-row">
+        <span class="summary-key">Farm name</span>
+        <span class="summary-val">{{ profile.farm_name|default:"—" }}</span>
+      </div>
+      <div class="summary-row">
+        <span class="summary-key">Size</span>
+        <span class="summary-val">{{ profile.size_acres|default:"—" }} acres · {{ profile.num_ponds|default:"—" }} pond{{ profile.num_ponds|pluralize }}</span>
+      </div>
+      <div class="summary-row">
+        <span class="summary-key">Water source</span>
+        <span class="summary-val">{{ profile.get_water_source_display|default:"—" }}</span>
+      </div>
+      <div class="summary-row">
+        <span class="summary-key">Location</span>
+        <span class="summary-val">{{ location_label }}</span>
+      </div>
+      <div class="summary-row">
+        <span class="summary-key">Species</span>
+        <span class="summary-val">{{ profile.species_display|default:"—" }}</span>
+      </div>
+      <div class="summary-row">
+        <span class="summary-key">Experience</span>
+        <span class="summary-val">{{ profile.farming_experience_years|default:"0" }} year{{ profile.farming_experience_years|pluralize }}</span>
+      </div>
+    </div>
+
+    {# ── Finish button ── #}
+    <form method="post" style="margin:0">
+      {% csrf_token %}
+      <div class="ob-actions">
+        <a href="{% url 'farm:onboarding_step3' %}" class="btn-ob-back">← Back</a>
+        <button type="submit" class="btn-ob-finish">
+          🚀 Go to Dashboard
+        </button>
+      </div>
+    </form>
+  </div>
+
+</div>
+</body>
+</html>

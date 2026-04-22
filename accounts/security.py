@@ -97,10 +97,18 @@ def remaining_lockout_seconds(email: str, ip: str | None) -> int:
 
 def register_session(user, request) -> None:
     from .models import UserSession
+
+    # session save করো আগে, তারপর key নাও
+    if not request.session.session_key:
+        request.session.save()
+
     sk   = request.session.session_key or ""
     ip   = get_client_ip(request)
     ua   = request.META.get("HTTP_USER_AGENT", "")
     hint = device_hint_from_ua(ua)
+
+    if not sk:
+        return  # session key না থাকলে skip করো
 
     UserSession.objects.update_or_create(
         session_key=sk,
@@ -156,11 +164,11 @@ def send_otp_email(user, otp_token) -> None:
                 settings, "DEFAULT_FROM_EMAIL", "noreply@aquasmart.local"
             ),
             recipient_list=[user.email],
-            fail_silently=False,   # raise exception so we can log the error
+            fail_silently=False,
         )
         print(f"[OTP] Email sent to {user.email}")
 
     except Exception as e:
-        # Email failed but OTP is still visible in terminal above
         print(f"[OTP] Email sending failed: {e}")
         print("[OTP] Use the code printed in terminal above.")
+

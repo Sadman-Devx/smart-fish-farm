@@ -1,0 +1,197 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Setup Your Farm — AquaSmart</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <style>
+    /* ── Onboarding shell ─────────────────────────── */
+    body { background: var(--bg); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .ob-wrap { width: 100%; max-width: 560px; }
+
+    /* ── Progress bar ─────────────────────────────── */
+    .ob-progress { margin-bottom: 32px; }
+    .ob-steps { display: flex; gap: 8px; margin-bottom: 10px; }
+    .ob-step-dot {
+      flex: 1; height: 4px; border-radius: 2px;
+      background: var(--surface3); transition: background .3s;
+    }
+    .ob-step-dot.done    { background: var(--success); }
+    .ob-step-dot.active  { background: var(--accent); }
+    .ob-progress-label { font-size: 11px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+
+    /* ── Card ─────────────────────────────────────── */
+    .ob-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 36px;
+      box-shadow: 0 24px 64px rgba(0,0,0,.35);
+    }
+    .ob-header { margin-bottom: 28px; }
+    .ob-icon { font-size: 36px; margin-bottom: 12px; }
+    .ob-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 22px; font-weight: 800;
+      color: var(--text); margin-bottom: 4px;
+    }
+    .ob-subtitle { font-size: 13px; color: var(--muted); }
+
+    /* ── Form fields ──────────────────────────────── */
+    .ob-fields { display: flex; flex-direction: column; gap: 18px; }
+    .ob-field label {
+      display: block; font-size: 11px; font-weight: 600;
+      color: var(--muted); text-transform: uppercase; letter-spacing: .06em;
+      margin-bottom: 6px;
+    }
+    .ob-field input,
+    .ob-field select {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 14px;
+      padding: 11px 14px;
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+      -webkit-appearance: none;
+    }
+    .ob-field input:focus,
+    .ob-field select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(0,229,180,.12);
+    }
+    .ob-field input::placeholder { color: var(--muted); }
+    .ob-field .help  { font-size: 11px; color: var(--muted); margin-top: 5px; }
+    .ob-field .error { font-size: 11px; color: var(--danger); margin-top: 5px; }
+
+    /* Two-column grid for numeric fields */
+    .ob-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+    /* ── Buttons ──────────────────────────────────── */
+    .ob-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 28px; gap: 12px; }
+    .btn-ob-primary {
+      flex: 1;
+      padding: 13px;
+      background: var(--accent);
+      color: #0a1628;
+      font-family: 'Syne', sans-serif;
+      font-size: 15px; font-weight: 800;
+      border: none; border-radius: 9px;
+      cursor: pointer; transition: opacity .15s;
+    }
+    .btn-ob-primary:hover { opacity: .88; }
+    .btn-ob-skip {
+      font-size: 12px; color: var(--muted);
+      background: none; border: none; cursor: pointer;
+      text-decoration: underline; padding: 0;
+    }
+    .btn-ob-skip:hover { color: var(--text); }
+
+    @media (max-width: 600px) {
+      .ob-card { padding: 24px 18px; }
+      .ob-row2 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="ob-wrap">
+
+  {# ── Progress ── #}
+  <div class="ob-progress">
+    <div class="ob-steps">
+      {% for i in "1234" %}
+        {% with n=forloop.counter %}
+          <div class="ob-step-dot
+            {% if n < current_step %}done
+            {% elif n == current_step %}active
+            {% endif %}"></div>
+        {% endwith %}
+      {% endfor %}
+    </div>
+    <div class="ob-progress-label">Step {{ current_step }} of {{ total_steps }} — {{ step_title }}</div>
+  </div>
+
+  <div class="ob-card">
+    <div class="ob-header">
+      <div class="ob-icon">🏡</div>
+      <div class="ob-title">{{ step_title }}</div>
+      <div class="ob-subtitle">{{ step_subtitle }}</div>
+    </div>
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      {% if form.non_field_errors %}
+      <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);
+        border-radius:8px;padding:10px 14px;font-size:13px;color:var(--danger);margin-bottom:16px">
+        {% for e in form.non_field_errors %}{{ e }}{% endfor %}
+      </div>
+      {% endif %}
+
+      <div class="ob-fields">
+
+        {# Farm name #}
+        <div class="ob-field">
+          <label for="id_farm_name">Farm name</label>
+          <input type="text" name="farm_name" id="id_farm_name"
+            value="{{ form.farm_name.value|default:'' }}"
+            placeholder="e.g. Rahim's Fish Farm" autofocus>
+          {% if form.farm_name.errors %}<div class="error">{{ form.farm_name.errors.0 }}</div>{% endif %}
+        </div>
+
+        {# Size + Ponds on same row #}
+        <div class="ob-row2">
+          <div class="ob-field">
+            <label for="id_size_acres">Farm size (acres)</label>
+            <input type="number" name="size_acres" id="id_size_acres"
+              value="{{ form.size_acres.value|default:'' }}"
+              placeholder="e.g. 5.5" min="0.1" step="0.1">
+            {% if form.size_acres.errors %}<div class="error">{{ form.size_acres.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="ob-field">
+            <label for="id_num_ponds">Number of ponds</label>
+            <input type="number" name="num_ponds" id="id_num_ponds"
+              value="{{ form.num_ponds.value|default:'' }}"
+              placeholder="e.g. 3" min="1">
+            {% if form.num_ponds.errors %}<div class="error">{{ form.num_ponds.errors.0 }}</div>{% endif %}
+          </div>
+        </div>
+
+        {# Water source #}
+        <div class="ob-field">
+          <label for="id_water_source">Primary water source</label>
+          <select name="water_source" id="id_water_source">
+            <option value="">— Select water source —</option>
+            {% for value, label in form.fields.water_source.choices %}
+              {% if value %}
+              <option value="{{ value }}"
+                {% if form.water_source.value == value %}selected{% endif %}>
+                {{ label }}
+              </option>
+              {% endif %}
+            {% endfor %}
+          </select>
+          {% if form.water_source.errors %}<div class="error">{{ form.water_source.errors.0 }}</div>{% endif %}
+        </div>
+
+      </div>{# /ob-fields #}
+
+      <div class="ob-actions">
+        <button type="submit" class="btn-ob-primary">Continue →</button>
+        <form method="post" action="{% url 'farm:onboarding_skip' %}" style="margin:0">
+          {% csrf_token %}
+          <button type="submit" class="btn-ob-skip">Skip setup</button>
+        </form>
+      </div>
+    </form>
+  </div>
+
+</div>
+</body>
+</html>

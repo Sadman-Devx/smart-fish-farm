@@ -1,0 +1,201 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Fish & Experience — AquaSmart</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <style>
+    body { background: var(--bg); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .ob-wrap { width: 100%; max-width: 560px; }
+    .ob-progress { margin-bottom: 32px; }
+    .ob-steps { display: flex; gap: 8px; margin-bottom: 10px; }
+    .ob-step-dot { flex: 1; height: 4px; border-radius: 2px; background: var(--surface3); }
+    .ob-step-dot.done   { background: var(--success); }
+    .ob-step-dot.active { background: var(--accent); }
+    .ob-progress-label { font-size: 11px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+    .ob-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 36px; box-shadow: 0 24px 64px rgba(0,0,0,.35); }
+    .ob-icon  { font-size: 36px; margin-bottom: 12px; }
+    .ob-title { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; color: var(--text); margin-bottom: 4px; }
+    .ob-subtitle { font-size: 13px; color: var(--muted); margin-bottom: 28px; }
+
+    /* Species grid */
+    .species-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px; display: block; }
+    .species-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 6px; }
+    .species-card {
+      position: relative;
+      background: var(--surface2);
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: all .15s;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .species-card:hover { border-color: var(--accent2); }
+    .species-card input[type="checkbox"] {
+      position: absolute;
+      opacity: 0; width: 0; height: 0;
+    }
+    .species-card.selected {
+      border-color: var(--accent) !important;
+      background: rgba(0,229,180,.08);
+    }
+    .species-card .s-emoji { font-size: 24px; flex-shrink: 0; }
+    .species-card .s-name  { font-size: 14px; font-weight: 600; color: var(--text); }
+    .species-card .s-local { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .species-card .s-check {
+      margin-left: auto; width: 18px; height: 18px;
+      border-radius: 50%;
+      background: var(--surface3);
+      border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; flex-shrink: 0; transition: all .15s;
+    }
+    .species-card.selected .s-check {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #0a1628;
+    }
+    .species-error { font-size: 11px; color: var(--danger); margin-top: 6px; }
+
+    /* Experience field */
+    .ob-field { margin-top: 22px; }
+    .ob-field label { display: block; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+    .ob-field input {
+      width: 100%; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text); font-family: 'Space Grotesk', sans-serif;
+      font-size: 14px; padding: 11px 14px; outline: none;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .ob-field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,229,180,.12); }
+    .ob-field input::placeholder { color: var(--muted); }
+    .ob-field .help  { font-size: 11px; color: var(--muted); margin-top: 5px; }
+    .ob-field .error { font-size: 11px; color: var(--danger); margin-top: 5px; }
+
+    /* Actions */
+    .ob-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 28px; gap: 12px; }
+    .btn-ob-primary { flex: 1; padding: 13px; background: var(--accent); color: #0a1628; font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 800; border: none; border-radius: 9px; cursor: pointer; transition: opacity .15s; }
+    .btn-ob-primary:hover { opacity: .88; }
+    .btn-ob-back { padding: 13px 18px; background: var(--surface2); color: var(--muted); font-family: 'Space Grotesk', sans-serif; font-size: 13px; font-weight: 500; border: 1px solid var(--border); border-radius: 9px; cursor: pointer; text-decoration: none; transition: all .15s; }
+    .btn-ob-back:hover { color: var(--text); border-color: var(--accent2); }
+    .btn-ob-skip { font-size: 12px; color: var(--muted); background: none; border: none; cursor: pointer; text-decoration: underline; padding: 0; }
+
+    @media (max-width: 600px) { .ob-card { padding: 24px 18px; } .species-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div class="ob-wrap">
+
+  <div class="ob-progress">
+    <div class="ob-steps">
+      {% for i in "1234" %}{% with n=forloop.counter %}
+        <div class="ob-step-dot {% if n < current_step %}done{% elif n == current_step %}active{% endif %}"></div>
+      {% endwith %}{% endfor %}
+    </div>
+    <div class="ob-progress-label">Step {{ current_step }} of {{ total_steps }} — {{ step_title }}</div>
+  </div>
+
+  <div class="ob-card">
+    <div class="ob-icon">🐟</div>
+    <div class="ob-title">{{ step_title }}</div>
+    <div class="ob-subtitle">{{ step_subtitle }}</div>
+
+    {% if form.non_field_errors %}
+    <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:10px 14px;font-size:13px;color:var(--danger);margin-bottom:16px">
+      {% for e in form.non_field_errors %}{{ e }}{% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      {# ── Species multi-select cards ── #}
+      <span class="species-label">Which species do you farm? (select all that apply)</span>
+      {% if form.species.errors %}
+        <div class="species-error">{{ form.species.errors.0 }}</div>
+      {% endif %}
+
+      <div class="species-grid" id="speciesGrid">
+        {% for value, label in form.fields.species.choices %}
+        {% with checked=form.species.value %}
+        <label class="species-card {% if value in checked %}selected{% endif %}"
+               id="card_{{ value }}">
+          <input type="checkbox" name="species" value="{{ value }}"
+            {% if value in checked %}checked{% endif %}>
+          <span class="s-emoji">
+            {% if value == "tilapia"  %}🐟
+            {% elif value == "catfish" %}🐠
+            {% elif value == "rui"     %}🐡
+            {% elif value == "katla"   %}🐟
+            {% elif value == "pangash" %}🦈
+            {% else %}🐟{% endif %}
+          </span>
+          <div>
+            <div class="s-name">{{ label }}</div>
+            <div class="s-local">
+              {% if value == "rui" %}Labeo rohita
+              {% elif value == "katla" %}Catla catla
+              {% elif value == "pangash" %}Pangasius hypophthalmus
+              {% elif value == "tilapia" %}Oreochromis niloticus
+              {% elif value == "catfish" %}Clarias batrachus
+              {% endif %}
+            </div>
+          </div>
+          <div class="s-check">{% if value in checked %}✓{% endif %}</div>
+        </label>
+        {% endwith %}
+        {% endfor %}
+      </div>
+
+      {# ── Experience ── #}
+      <div class="ob-field">
+        <label for="id_farming_experience_years">Years of fish farming experience</label>
+        <input type="number" name="farming_experience_years" id="id_farming_experience_years"
+          value="{{ form.farming_experience_years.value|default:'' }}"
+          placeholder="e.g. 5" min="0" max="80">
+        <div class="help">Enter 0 if you are just starting out.</div>
+        {% if form.farming_experience_years.errors %}
+          <div class="error">{{ form.farming_experience_years.errors.0 }}</div>
+        {% endif %}
+      </div>
+
+      <div class="ob-actions">
+        <a href="{% url 'farm:onboarding_step2' %}" class="btn-ob-back">← Back</a>
+        <button type="submit" class="btn-ob-primary">Continue →</button>
+      </div>
+      <div style="text-align:center;margin-top:14px">
+        <form method="post" action="{% url 'farm:onboarding_skip' %}" style="display:inline;margin:0">
+          {% csrf_token %}
+          <button type="submit" class="btn-ob-skip">Skip setup</button>
+        </form>
+      </div>
+    </form>
+  </div>
+
+</div>
+
+<script>
+// Toggle selected class on species cards
+document.querySelectorAll('.species-card').forEach(function(card) {
+  var cb = card.querySelector('input[type="checkbox"]');
+  var check = card.querySelector('.s-check');
+  card.addEventListener('click', function(e) {
+    // The label click toggles the checkbox natively
+    setTimeout(function() {
+      if (cb.checked) {
+        card.classList.add('selected');
+        check.textContent = '✓';
+      } else {
+        card.classList.remove('selected');
+        check.textContent = '';
+      }
+    }, 0);
+  });
+});
+</script>
+</body>
+</html>

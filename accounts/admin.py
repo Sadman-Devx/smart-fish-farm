@@ -27,3 +27,4 @@ class UserSessionAdmin(admin.ModelAdmin):
                     "last_active", "is_active")
     list_filter  = ("is_active",)
     search_fields = ("user__email", "ip_address")
+

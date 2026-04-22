@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils import timezone
+from django.conf import settings
 
 
 # ── Pond ──────────────────────────────────────────────────────────────────────
@@ -295,3 +296,141 @@ class PondNote(models.Model):
 
     def __str__(self):
         return f"Note – {self.pond.name} – {self.created_at:%Y-%m-%d}"
+
+
+"""
+Append this block to the bottom of farm/models.py
+─────────────────────────────────────────────────
+Add the import at the top of models.py:
+    from django.conf import settings
+"""
+
+# ── FarmProfile ───────────────────────────────────────────────────────────────
+
+class FarmProfile(models.Model):
+    """
+    One-to-one extension of the User model that stores farm setup data
+    collected during the post-registration onboarding flow.
+
+    Design notes
+    ────────────
+    • OneToOne to AUTH_USER_MODEL so we never duplicate user rows.
+    • species is stored as a JSONField list of strings (e.g. ["tilapia","rui"])
+      because a user can farm multiple species and we don't need a separate table.
+    • Latitude/longitude are nullable; if the user denied GPS we store
+      district/upazila text instead.
+    • Cached weather fields are updated on demand via the onboarding weather step
+      and can be refreshed at any time from the dashboard.
+    • onboarding_complete = False blocks access to the main app until the
+      four-step wizard is finished.
+    """
+
+    WATER_SOURCE_CHOICES = [
+        ("river",       "River / Canal"),
+        ("groundwater", "Groundwater / Tube Well"),
+        ("rainwater",   "Rainwater"),
+        ("reservoir",   "Reservoir / Lake"),
+        ("mixed",       "Mixed Sources"),
+        ("other",       "Other"),
+    ]
+
+    SPECIES_CHOICES = [
+        ("tilapia", "Tilapia"),
+        ("catfish", "Catfish"),
+        ("rui",     "Rui (Rohu)"),
+        ("katla",   "Katla"),
+        ("pangash", "Pangash (Pangasius)"),
+    ]
+
+    # ── Ownership ─────────────────────────────────────────────────────────────
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="farm_profile",
+    )
+
+    # ── Step 1: Farm basics ───────────────────────────────────────────────────
+    farm_name   = models.CharField(max_length=150, blank=True)
+    size_acres  = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True,
+        help_text="Total farm area in acres",
+    )
+    num_ponds   = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="Number of fish ponds",
+    )
+    water_source = models.CharField(
+        max_length=20, choices=WATER_SOURCE_CHOICES, blank=True,
+    )
+
+    # ── Step 2: Location ──────────────────────────────────────────────────────
+    latitude  = models.DecimalField(
+        max_digits=10, decimal_places=7, null=True, blank=True,
+        help_text="GPS latitude (auto-detected or entered manually)",
+    )
+    longitude = models.DecimalField(
+        max_digits=10, decimal_places=7, null=True, blank=True,
+        help_text="GPS longitude (auto-detected or entered manually)",
+    )
+    district  = models.CharField(max_length=60, blank=True,
+                                 help_text="Bangladesh district (fallback when GPS denied)")
+    upazila   = models.CharField(max_length=60, blank=True,
+                                 help_text="Bangladesh upazila")
+
+    # ── Step 3: Fish info ─────────────────────────────────────────────────────
+    species = models.JSONField(
+        default=list, blank=True,
+        help_text='List of farmed species, e.g. ["tilapia","rui"]',
+    )
+    farming_experience_years = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="Years of fish farming experience",
+    )
+
+    # ── Step 4: Cached weather (fetched during onboarding, refresh on demand) ─
+    weather_temp_c       = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True,
+        help_text="Last fetched air temperature (°C) at farm location",
+    )
+    weather_humidity_pct = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="Last fetched relative humidity (%)",
+    )
+    weather_rain_mm      = models.DecimalField(
+        max_digits=6, decimal_places=2, null=True, blank=True,
+        help_text="Rain volume in last 1h (mm) — 0 means no rain",
+    )
+    weather_condition    = models.CharField(max_length=60, blank=True,
+                                            help_text='e.g. "Clear", "Rain"')
+    weather_fetched_at   = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the cached weather was last updated",
+    )
+
+    # ── Onboarding progress ───────────────────────────────────────────────────
+    onboarding_complete = models.BooleanField(
+        default=False,
+        help_text="True once the user finishes all 4 onboarding steps",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Farm Profile"
+
+    def __str__(self):
+        return f"{self.farm_name or 'Unnamed farm'} — {self.user}"
+
+    @property
+    def location_display(self) -> str:
+        """Human-readable location string."""
+        if self.latitude and self.longitude:
+            return f"{self.latitude:.4f}°N, {self.longitude:.4f}°E"
+        parts = [p for p in (self.upazila, self.district) if p]
+        return ", ".join(parts) if parts else "Location not set"
+
+    @property
+    def species_display(self) -> str:
+        """Comma-separated list of species labels."""
+        label_map = dict(FarmProfile.SPECIES_CHOICES)
+        return ", ".join(label_map.get(s, s) for s in (self.species or []))

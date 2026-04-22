@@ -1,12 +1,26 @@
+"""
+farm/urls.py
+─────────────────────────────────────────────────────────────────────────────
+Full URL config for the farm app — includes the new onboarding routes.
+"""
 from django.urls import path
 from . import views
+from . import onboarding_views
 
 app_name = "farm"
 
 urlpatterns = [
+    # ── Onboarding wizard ──────────────────────────────────────────────────────
+    path("onboarding/step1/",   onboarding_views.onboarding_step1, name="onboarding_step1"),
+    path("onboarding/step2/",   onboarding_views.onboarding_step2, name="onboarding_step2"),
+    path("onboarding/step3/",   onboarding_views.onboarding_step3, name="onboarding_step3"),
+    path("onboarding/step4/",   onboarding_views.onboarding_step4, name="onboarding_step4"),
+    path("onboarding/skip/",    onboarding_views.onboarding_skip,  name="onboarding_skip"),
+    path("onboarding/upazilas/",onboarding_views.upazila_options,  name="upazila_options"),
+
     # ── Core ──────────────────────────────────────────────────────────────────
     path("",                           views.dashboard,        name="dashboard"),
-    path("alerts/test/",              views.send_test_alert,  name="send_test_alert"),
+    path("alerts/test/",               views.send_test_alert,  name="send_test_alert"),
 
     # ── Ponds & Batches ────────────────────────────────────────────────────────
     path("ponds/",                    views.pond_list,         name="pond_list"),

@@ -246,6 +246,6 @@ def register_view(request):
         ua = request.META.get("HTTP_USER_AGENT", "")
         _complete_login(request, user, remember=False, ip=ip, ua=ua)
         messages.success(request, f"Welcome to AquaSmart, {user.display_name}!")
-        return redirect("farm:dashboard")
+        return redirect("farm:onboarding_step1")
 
     return render(request, "accounts/register.html", {"form": form})

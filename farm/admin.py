@@ -2,7 +2,7 @@ from django.contrib import admin
 from .models import (
     Pond, FishBatch, GrowthRecord, WeatherRecord, DailyWeather,
     FeedingProfile, FeedLog, FeedingReminder, SensorReading,
-    HarvestRecord, Expense, MortalityLog, FarmAlert, PondNote,
+    HarvestRecord, Expense, MortalityLog, FarmAlert, PondNote, FarmProfile,
 )
 
 
@@ -96,3 +96,43 @@ class FarmAlertAdmin(admin.ModelAdmin):
 class PondNoteAdmin(admin.ModelAdmin):
     list_display = ("pond", "author", "created_at")
     list_filter = ("pond",)
+
+
+@admin.register(FarmProfile)
+class FarmProfileAdmin(admin.ModelAdmin):
+    list_display  = (
+        "user", "farm_name", "size_acres", "num_ponds",
+        "water_source", "location_display", "species_display",
+        "farming_experience_years", "onboarding_complete", "created_at",
+    )
+    list_filter   = ("water_source", "onboarding_complete")
+    search_fields = ("farm_name", "user__email", "district", "upazila")
+    readonly_fields = (
+        "created_at", "updated_at", "weather_fetched_at",
+        "location_display", "species_display",
+    )
+ 
+    fieldsets = (
+        ("Ownership", {
+            "fields": ("user", "onboarding_complete"),
+        }),
+        ("Farm Basics (Step 1)", {
+            "fields": ("farm_name", "size_acres", "num_ponds", "water_source"),
+        }),
+        ("Location (Step 2)", {
+            "fields": ("latitude", "longitude", "district", "upazila", "location_display"),
+        }),
+        ("Fish Info (Step 3)", {
+            "fields": ("species", "species_display", "farming_experience_years"),
+        }),
+        ("Cached Weather (Step 4)", {
+            "fields": (
+                "weather_temp_c", "weather_humidity_pct",
+                "weather_rain_mm", "weather_condition", "weather_fetched_at",
+            ),
+        }),
+        ("Timestamps", {
+            "fields": ("created_at", "updated_at"),
+            "classes": ("collapse",),
+        }),
+    )

@@ -1,0 +1,292 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Your Location — AquaSmart</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <style>
+    body { background: var(--bg); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .ob-wrap { width: 100%; max-width: 560px; }
+    .ob-progress { margin-bottom: 32px; }
+    .ob-steps { display: flex; gap: 8px; margin-bottom: 10px; }
+    .ob-step-dot { flex: 1; height: 4px; border-radius: 2px; background: var(--surface3); transition: background .3s; }
+    .ob-step-dot.done   { background: var(--success); }
+    .ob-step-dot.active { background: var(--accent); }
+    .ob-progress-label { font-size: 11px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+    .ob-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 36px; box-shadow: 0 24px 64px rgba(0,0,0,.35); }
+    .ob-icon  { font-size: 36px; margin-bottom: 12px; }
+    .ob-title { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; color: var(--text); margin-bottom: 4px; }
+    .ob-subtitle { font-size: 13px; color: var(--muted); margin-bottom: 28px; }
+
+    /* GPS button */
+    .gps-btn {
+      width: 100%; padding: 16px;
+      background: linear-gradient(135deg, rgba(0,229,180,.15), rgba(0,184,255,.1));
+      border: 1px solid rgba(0,229,180,.35);
+      border-radius: 10px; cursor: pointer;
+      display: flex; align-items: center; gap: 14px;
+      font-family: 'Space Grotesk', sans-serif;
+      color: var(--text); font-size: 14px; font-weight: 500;
+      transition: all .2s; margin-bottom: 20px;
+    }
+    .gps-btn:hover { border-color: var(--accent); background: rgba(0,229,180,.12); }
+    .gps-btn .gps-icon { font-size: 26px; flex-shrink: 0; }
+    .gps-btn .gps-label strong { display: block; font-size: 15px; font-weight: 600; }
+    .gps-btn .gps-label span { font-size: 12px; color: var(--muted); }
+
+    /* Status states */
+    .gps-status {
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 16px;
+      display: none;
+    }
+    .gps-status.detecting { background: rgba(0,184,255,.1); border: 1px solid rgba(0,184,255,.3); color: var(--accent2); }
+    .gps-status.success   { background: rgba(16,185,129,.1); border: 1px solid rgba(16,185,129,.3); color: var(--success); }
+    .gps-status.denied    { background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.3); color: var(--warn); }
+
+    /* Divider */
+    .divider { display: flex; align-items: center; gap: 10px; margin: 20px 0; }
+    .divider-line { flex: 1; height: 1px; background: var(--border); }
+    .divider-text { font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+    /* Manual location fields */
+    .manual-section { display: none; }
+    .manual-section.visible { display: block; }
+    .ob-field { margin-bottom: 16px; }
+    .ob-field label { display: block; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+    .ob-field select, .ob-field input {
+      width: 100%; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text); font-family: 'Space Grotesk', sans-serif;
+      font-size: 14px; padding: 11px 14px; outline: none;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .ob-field select:focus, .ob-field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,229,180,.12); }
+    .ob-field .error { font-size: 11px; color: var(--danger); margin-top: 5px; }
+
+    /* Actions */
+    .ob-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 28px; gap: 12px; }
+    .btn-ob-primary { flex: 1; padding: 13px; background: var(--accent); color: #0a1628; font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 800; border: none; border-radius: 9px; cursor: pointer; transition: opacity .15s; }
+    .btn-ob-primary:hover { opacity: .88; }
+    .btn-ob-back { padding: 13px 18px; background: var(--surface2); color: var(--muted); font-family: 'Space Grotesk', sans-serif; font-size: 13px; font-weight: 500; border: 1px solid var(--border); border-radius: 9px; cursor: pointer; text-decoration: none; transition: all .15s; }
+    .btn-ob-back:hover { color: var(--text); border-color: var(--accent2); }
+    .btn-ob-skip { font-size: 12px; color: var(--muted); background: none; border: none; cursor: pointer; text-decoration: underline; padding: 0; }
+    .btn-ob-skip:hover { color: var(--text); }
+
+    @media (max-width: 600px) { .ob-card { padding: 24px 18px; } }
+  </style>
+</head>
+<body>
+<div class="ob-wrap">
+
+  <div class="ob-progress">
+    <div class="ob-steps">
+      {% for i in "1234" %}
+        {% with n=forloop.counter %}
+          <div class="ob-step-dot {% if n < current_step %}done{% elif n == current_step %}active{% endif %}"></div>
+        {% endwith %}
+      {% endfor %}
+    </div>
+    <div class="ob-progress-label">Step {{ current_step }} of {{ total_steps }} — {{ step_title }}</div>
+  </div>
+
+  <div class="ob-card">
+    <div class="ob-icon">📍</div>
+    <div class="ob-title">{{ step_title }}</div>
+    <div class="ob-subtitle">{{ step_subtitle }}</div>
+
+    {% if form.non_field_errors %}
+    <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:10px 14px;font-size:13px;color:var(--danger);margin-bottom:16px">
+      {% for e in form.non_field_errors %}{{ e }}{% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post" id="locationForm" novalidate>
+      {% csrf_token %}
+      {# Hidden fields set by JS #}
+      <input type="hidden" name="latitude"        id="hidLat"    value="{{ saved_lat|default:'' }}">
+      <input type="hidden" name="longitude"       id="hidLng"    value="{{ saved_lng|default:'' }}">
+      <input type="hidden" name="location_method" id="hidMethod" value="skip">
+
+      {# GPS button #}
+      <button type="button" class="gps-btn" id="gpsBtn">
+        <span class="gps-icon">🛰</span>
+        <div class="gps-label">
+          <strong>Use my current location</strong>
+          <span>Tap to detect via GPS — most accurate</span>
+        </div>
+      </button>
+
+      {# Status messages #}
+      <div class="gps-status detecting" id="statusDetecting">
+        ⏳ Detecting your location…
+      </div>
+      <div class="gps-status success" id="statusSuccess">
+        ✓ Location detected — <span id="coordsDisplay"></span>
+      </div>
+      <div class="gps-status denied" id="statusDenied">
+        ⚠ Location access denied. Please select your district and upazila below.
+      </div>
+
+      {# Already have GPS coords from previous attempt? Show success. #}
+      {% if saved_lat and saved_lng %}
+      <div class="gps-status success" id="statusPrevious" style="display:flex">
+        ✓ Location saved: {{ saved_lat|floatformat:4 }}°N, {{ saved_lng|floatformat:4 }}°E
+      </div>
+      {% endif %}
+
+      {# Divider #}
+      <div class="divider">
+        <div class="divider-line"></div>
+        <span class="divider-text">or choose manually</span>
+        <div class="divider-line"></div>
+      </div>
+
+      {# Manual fallback #}
+      <div class="manual-section {% if saved_district %}visible{% endif %}" id="manualSection">
+        <div class="ob-field">
+          <label for="id_district">District</label>
+          <select name="district" id="id_district">
+            <option value="">— Select District —</option>
+            {% for value, label in form.fields.district.choices %}
+              {% if value %}
+              <option value="{{ value }}"
+                {% if value == saved_district %}selected{% endif %}>
+                {{ label }}
+              </option>
+              {% endif %}
+            {% endfor %}
+          </select>
+          {% if form.district.errors %}<div class="error">{{ form.district.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="ob-field">
+          <label for="id_upazila">Upazila</label>
+          <select name="upazila" id="id_upazila">
+            <option value="">— Select District first —</option>
+            {# Pre-populate if district already chosen #}
+            {% if saved_district and saved_upazila %}
+              <option value="{{ saved_upazila }}" selected>{{ saved_upazila }}</option>
+            {% endif %}
+          </select>
+          {% if form.upazila.errors %}<div class="error">{{ form.upazila.errors.0 }}</div>{% endif %}
+        </div>
+      </div>
+
+      <div class="ob-actions">
+        <a href="{% url 'farm:onboarding_step1' %}" class="btn-ob-back">← Back</a>
+        <button type="submit" class="btn-ob-primary" id="continueBtn">Continue →</button>
+      </div>
+
+      {# Skip #}
+      <div style="text-align:center;margin-top:14px">
+        <form method="post" action="{% url 'farm:onboarding_skip' %}" style="display:inline;margin:0">
+          {% csrf_token %}
+          <button type="submit" class="btn-ob-skip">Skip setup</button>
+        </form>
+      </div>
+    </form>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  var gpsBtn        = document.getElementById('gpsBtn');
+  var hidLat        = document.getElementById('hidLat');
+  var hidLng        = document.getElementById('hidLng');
+  var hidMethod     = document.getElementById('hidMethod');
+  var statusDetect  = document.getElementById('statusDetecting');
+  var statusSuccess = document.getElementById('statusSuccess');
+  var statusDenied  = document.getElementById('statusDenied');
+  var coordsDisplay = document.getElementById('coordsDisplay');
+  var manualSection = document.getElementById('manualSection');
+  var districtSel   = document.getElementById('id_district');
+  var upazilaSel    = document.getElementById('id_upazila');
+  var mainForm      = document.getElementById('locationForm');
+
+  // ── GPS ──────────────────────────────────────────────────────────────────
+  gpsBtn.addEventListener('click', function () {
+    if (!navigator.geolocation) {
+      showDenied();
+      return;
+    }
+    showState('detecting');
+    navigator.geolocation.getCurrentPosition(
+      function (pos) {
+        var lat = pos.coords.latitude.toFixed(7);
+        var lng = pos.coords.longitude.toFixed(7);
+        hidLat.value    = lat;
+        hidLng.value    = lng;
+        hidMethod.value = 'gps';
+        coordsDisplay.textContent = lat + '°N, ' + lng + '°E';
+        showState('success');
+        // Clear manual fields when GPS works
+        districtSel.value = '';
+        if (upazilaSel) upazilaSel.innerHTML = '<option value="">— Select District first —</option>';
+        manualSection.classList.remove('visible');
+      },
+      function () { showDenied(); }
+    );
+  });
+
+  function showDenied() {
+    hidLat.value    = '';
+    hidLng.value    = '';
+    hidMethod.value = 'manual';
+    showState('denied');
+    manualSection.classList.add('visible');
+  }
+
+  function showState(state) {
+    statusDetect.style.display  = state === 'detecting' ? 'block' : 'none';
+    statusSuccess.style.display = state === 'success'   ? 'block' : 'none';
+    statusDenied.style.display  = state === 'denied'    ? 'block' : 'none';
+  }
+
+  // ── District → Upazila AJAX ──────────────────────────────────────────────
+  districtSel.addEventListener('change', function () {
+    var district = this.value;
+    if (!district) {
+      upazilaSel.innerHTML = '<option value="">— Select District first —</option>';
+      return;
+    }
+    hidMethod.value = 'manual';
+    fetch('{% url "farm:upazila_options" %}?district=' + encodeURIComponent(district))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        upazilaSel.innerHTML = '<option value="">— Select Upazila —</option>';
+        data.options.forEach(function (opt) {
+          var el = document.createElement('option');
+          el.value = opt.value;
+          el.textContent = opt.label;
+          upazilaSel.appendChild(el);
+        });
+      });
+  });
+
+  // ── If manual section already open (back navigation), set method ─────────
+  if (manualSection.classList.contains('visible')) {
+    hidMethod.value = 'manual';
+  }
+
+  // ── Form submit — set method if skipping both ────────────────────────────
+  mainForm.addEventListener('submit', function () {
+    var lat = hidLat.value;
+    var district = districtSel.value;
+    if (!lat && !district) {
+      hidMethod.value = 'skip';
+    } else if (lat) {
+      hidMethod.value = 'gps';
+    } else {
+      hidMethod.value = 'manual';
+    }
+  });
+})();
+</script>
+</body>
+</html>
