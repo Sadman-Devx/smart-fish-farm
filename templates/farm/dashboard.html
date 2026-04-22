@@ -211,7 +211,7 @@
   </div>
   {% if daily_feed_temp_rows %}
   <div class="table-responsive">
-    <table class="table">
+    <table class="table dashboard-feed-table">
       <thead>
         <tr>
           <th>Date</th>
@@ -232,9 +232,9 @@
           <td class="text-end">
             {% if row.recommended_feed_kg is not None %}
               {% if row.feed_kg < row.recommended_feed_kg %}
-                <span class="fs-xs text-warn">↓ under</span>
+                <span class="feed-status fs-xs text-warn">↓ under</span>
               {% else %}
-                <span class="fs-xs text-success">✓ ok</span>
+                <span class="feed-status fs-xs text-success">✓ ok</span>
               {% endif %}
             {% else %}—{% endif %}
           </td>
@@ -263,7 +263,7 @@
   </div>
   {% if recent_feed %}
   <div class="table-responsive">
-    <table class="table">
+    <table class="table  recent-feed-table">
       <thead>
         <tr><th>Date</th><th>Batch</th><th class="text-end">Feed (kg)</th><th class="text-end">Mode</th></tr>
       </thead>

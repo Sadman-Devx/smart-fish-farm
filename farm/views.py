@@ -194,9 +194,11 @@ def dashboard(request):
     for row in feed_daily:
         day    = row["date"]
         rec_kg = 0.0
+        has_recommendation_data = False
         for b in active_batches:
             val = smart_feed_kg_for_batch(b, day=day)
             if val is not None:
+                has_recommendation_data = True
                 rec_kg += val
 
         daily_feed_temp_rows.append({
@@ -205,11 +207,11 @@ def dashboard(request):
             "temp_c":              round(temp_by_day[day], 1) if day in temp_by_day else None,
             # Only show None (→ "—") if the service genuinely couldn't compute
             # (i.e. no FeedingProfile configured at all).
-            "recommended_feed_kg": round(rec_kg, 2) if rec_kg > 0 else None,
+            "recommended_feed_kg": round(rec_kg, 2) if has_recommendation_data else None,
         })
         target_actual_labels.append(str(day))
         target_actual_actual_values.append(round(float(row["total_feed_kg"]), 2))
-        target_actual_target_values.append(round(rec_kg, 2) if rec_kg > 0 else None)
+        target_actual_target_values.append(round(rec_kg, 2) if has_recommendation_data else None)
 
     # ── FIX: "Recommended feed today" KPI ─────────────────────────────────────
     today_feed_given_kg       = float(

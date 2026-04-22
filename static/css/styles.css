@@ -404,6 +404,27 @@ body > .container, body > main { margin-top: 0 !important; }
 .table-responsive { overflow-x: auto; }
 .table-sm td, .table-sm th { padding: 6px 12px !important; }
 
+/* Keep dashboard feed columns visually straight and aligned. */
+.dashboard-feed-table th:nth-child(n + 2),
+.dashboard-feed-table td:nth-child(n + 2) {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+.dashboard-feed-table .feed-status {
+  display: inline-block;
+  min-width: 58px;
+  text-align: right;
+}
+
+/* Keep dashboard Recent Feeding (Last 7 Logs) columns visually straight and aligned. */
+.recent-feed-table th:nth-child(n + 3),
+.recent-feed-table td:nth-child(n + 3) {
+  text-align: center !important;
+  font-variant-numeric: tabular-nums;
+  width: 300px;
+}
+
+
 /* ── Forms ────────────────────────────────────────────────────── */
 label, .form-label {
   font-size: 12px; font-weight: 600;
