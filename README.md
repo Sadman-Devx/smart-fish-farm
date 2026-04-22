@@ -54,6 +54,13 @@ python manage.py createsuperuser
 Run the development server:
 
 ```bash
+# Terminal 1 - Redis
+docker run -p 6379:6379 redis
+
+# Terminal 2 - Celery
+python -m celery -A smart_fish_farm worker -l info -P solo
+
+# Terminal 3 - Django
 python manage.py runserver
 ```
 

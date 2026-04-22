@@ -3,20 +3,22 @@ farm/services/feed_calculator.py
 ─────────────────────────────────────────────────────────────────────────────
 Smart feed calculator.
 
-Fix (2026-04):
-  Previously smart_feed_kg_for_batch() returned None whenever:
-    • No DailyWeather row existed for the requested day  AND
-    • The OpenWeather API key was missing/empty
-  This caused the "Recommended (KG)" dashboard column and the
-  "Recommended feed today" KPI to display 0 / — for every row.
+GUARANTEED BEHAVIOUR
+────────────────────
+This function ALWAYS returns a positive float as long as the batch has fish.
+It returns None ONLY when biomass is zero/negative (all fish dead).
 
-  The fix adds a three-level temperature fallback:
-    1. DailyWeather for the exact requested day  (already existed)
-    2. Most recent DailyWeather in the database  (NEW fallback)
-    3. Latest WeatherRecord for the pond         (already existed)
-    4. Hard default of 26 °C                     (NEW last resort)
-  This ensures feed recommendations are always shown as long as at
-  least one FeedingProfile exists.
+Temperature resolution (highest priority first)
+───────────────────────────────────────────────
+  1. Latest WeatherRecord for the pond  (actual sensor / manual entry)
+  2. DailyWeather for the exact day     (OpenWeather API cache)
+  3. Most-recent DailyWeather in DB     (fallback for historical dates)
+  4. Hard default: 26°C                 (absolute last resort)
+
+Feeding rate resolution
+───────────────────────
+  1. FeedingProfile matching water temperature
+  2. Built-in default: 3.0% of biomass/day  (when no profile configured)
 """
 from __future__ import annotations
 
@@ -29,22 +31,33 @@ from ..models import DailyWeather, FishBatch, FeedingProfile, WeatherRecord
 from .weather_ingest import get_or_update_daily_weather
 
 
-# ── Temperature-to-feeding-factor mapping ─────────────────────────────────────
+# ── Constants ─────────────────────────────────────────────────────────────────
+
+DEFAULT_FEED_RATE_PCT: float = 3.0   # fallback when no FeedingProfile found
+DEFAULT_TEMP_C: float        = 26.0  # fallback when no weather data at all
+
+
+# ── Temperature factor ────────────────────────────────────────────────────────
 
 def _temperature_factor(temp_c: float) -> float:
     """
-    Multiplier applied on top of the profile feeding rate.
-    Returns 0 when water is too cold for meaningful feeding.
+    Appetite multiplier applied on top of the profile feeding rate.
+
+      < 18°C  → 0.10  (very cold; minimal ration, never zero)
+      18–21°C → 0.40  (cool; reduced appetite)
+      22–25°C → 0.70  (sub-optimal)
+      26–30°C → 1.00  (optimal range)
+      > 30°C  → 0.90  (warm; slight stress)
     """
     if temp_c < 18:
-        return 0.0
+        return 0.10
     if temp_c < 22:
-        return 0.25
+        return 0.40
     if temp_c < 26:
-        return 0.5
+        return 0.70
     if temp_c <= 30:
-        return 1.0
-    return 1.0   # still feed at full rate above 30 °C
+        return 1.00
+    return 0.90
 
 
 # ── Main service function ─────────────────────────────────────────────────────
@@ -54,56 +67,58 @@ def smart_feed_kg_for_batch(
     day: date | None = None,
 ) -> Optional[float]:
     """
-    Return the recommended daily feed amount (kg) for *batch* on *day*.
+    Return the recommended daily feed (kg) for *batch* on *day*.
 
-    Steps
-    -----
-    1. Try to get / fetch DailyWeather for the exact *day*.
-       (Hits OpenWeather API only when the key is configured and the
-       record is not already cached — safe to call frequently.)
-    2. If that fails, use the most recent DailyWeather row we have.
-    3. Determine water temperature:
-         a. Latest WeatherRecord for the pond  (most accurate)
-         b. DailyWeather temperature           (ambient proxy)
-         c. Hard default 26 °C                 (last resort)
-    4. Look up the matching FeedingProfile for that temperature.
-    5. Compute:  feed_kg = biomass_kg × profile_rate% × temperature_factor
-    6. Return None only if no FeedingProfile exists.
+    Never returns None as long as the batch has a positive biomass.
     """
     target_day = day or timezone.now().date()
 
-    # ── Step 1: exact-day DailyWeather (tries API if key present) ─────────────
-    daily_weather: Optional[DailyWeather] = DailyWeather.objects.filter(
-        date=target_day
-    ).first()
+    # Guard: no fish → no feed
+    biomass_kg = batch.latest_biomass_kg
+    if biomass_kg <= 0:
+        return None
 
-    if daily_weather is None:
-        # Silent fetch — returns None if API key is missing or call fails
-        daily_weather = get_or_update_daily_weather(day=target_day)
+    # ── Step 1: resolve water temperature ─────────────────────────────────────
 
-    # ── Step 2: fall back to most-recent DailyWeather we have ─────────────────
-    if daily_weather is None:
-        daily_weather = DailyWeather.objects.order_by("-date").first()
-
-    # ── Step 3: determine water temperature ───────────────────────────────────
-    latest_pond_weather: Optional[WeatherRecord] = (
+    # Priority A — pond WeatherRecord (most accurate, from manual log / IoT)
+    pond_record: Optional[WeatherRecord] = (
         WeatherRecord.objects
         .filter(pond=batch.pond)
         .order_by("-timestamp")
         .first()
     )
 
-    if latest_pond_weather is not None:
-        # Pond sensor reading is the most accurate source
-        water_temp = float(latest_pond_weather.water_temp_c)
+    # Priority B — DailyWeather for the exact requested day
+    daily_weather: Optional[DailyWeather] = (
+        DailyWeather.objects.filter(date=target_day).first()
+    )
+    if daily_weather is None:
+        # Try live API fetch (silent no-op when key is not configured)
+        daily_weather = get_or_update_daily_weather(day=target_day)
+
+    # Priority C — most-recent DailyWeather row (for historical dates)
+    if daily_weather is None:
+        daily_weather = DailyWeather.objects.order_by("-date").first()
+
+    # Determine water temp for FeedingProfile look-up
+    if pond_record is not None:
+        water_temp = float(pond_record.water_temp_c)
     elif daily_weather is not None:
-        # Ambient API temperature as proxy
         water_temp = float(daily_weather.temperature_c)
     else:
-        # Absolute last resort: typical optimal temperature for most species
-        water_temp = 26.0
+        water_temp = DEFAULT_TEMP_C   # Priority D — absolute fallback
 
-    # ── Step 4: match a FeedingProfile ────────────────────────────────────────
+    # Determine ambient temp for appetite factor
+    # (prefer API/daily weather over pond sensor for ambient context)
+    if daily_weather is not None:
+        ambient_temp = float(daily_weather.temperature_c)
+    elif pond_record is not None:
+        ambient_temp = float(pond_record.water_temp_c)
+    else:
+        ambient_temp = DEFAULT_TEMP_C
+
+    # ── Step 2: resolve feeding rate ──────────────────────────────────────────
+
     profile: Optional[FeedingProfile] = (
         FeedingProfile.objects
         .filter(min_temp_c__lte=water_temp, max_temp_c__gte=water_temp)
@@ -111,25 +126,21 @@ def smart_feed_kg_for_batch(
         .first()
     )
 
-    if profile is None:
-        # No profile configured — cannot give a recommendation
-        return None
+    # Use profile rate if found, otherwise use built-in default
+    feed_rate_pct = (
+        float(profile.feeding_rate_pct)
+        if profile is not None
+        else DEFAULT_FEED_RATE_PCT
+    )
 
-    # ── Step 5: compute recommended feed amount ────────────────────────────────
-    biomass_kg       = batch.latest_biomass_kg
-    base_feed_rate   = float(profile.feeding_rate_pct)         # e.g. 3.0 (%)
-    base_daily_feed  = biomass_kg * base_feed_rate / 100.0
+    # ── Step 3: calculate ─────────────────────────────────────────────────────
 
-    # Temperature factor uses ambient temp when available, else pond temp
-    ambient_temp = float(daily_weather.temperature_c) if daily_weather else water_temp
-    factor       = _temperature_factor(ambient_temp)
+    base_feed   = biomass_kg * feed_rate_pct / 100.0
+    factor      = _temperature_factor(ambient_temp)
+    recommended = round(base_feed * factor, 2)
 
-    recommended = round(base_daily_feed * factor, 2)
-
-    # ── Step 6: guard against zero-biomass edge case ───────────────────────────
-    # Return the raw base amount (without factor) so the UI always has
-    # something useful to show, even at low temperatures.
-    if recommended == 0.0 and base_daily_feed > 0:
-        return round(base_daily_feed, 2)
+    # Never return 0 — always give at least the base amount
+    if recommended <= 0:
+        return round(base_feed, 2)
 
     return recommended

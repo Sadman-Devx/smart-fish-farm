@@ -28,7 +28,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'django.contrib.sites',          # required by allauth
+    'django.contrib.sites',
 
     # allauth
     'allauth',
@@ -113,19 +113,18 @@ LOGOUT_REDIRECT_URL = '/accounts/login/'
 # ── django-allauth ─────────────────────────────────────────────────────────────
 SITE_ID = 1
 
-# Login behaviour — use email only, no username
-ACCOUNT_LOGIN_METHODS             = {'email'}
-ACCOUNT_EMAIL_REQUIRED            = True
-ACCOUNT_USERNAME_REQUIRED         = False
-ACCOUNT_USER_MODEL_USERNAME_FIELD = None
-ACCOUNT_EMAIL_VERIFICATION        = 'optional'   # set 'mandatory' in production
+# ── FIX: replaces deprecated ACCOUNT_EMAIL_REQUIRED + ACCOUNT_USERNAME_REQUIRED
+# These two old settings caused the startup WARNING in the terminal.
+ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
 
-# Redirect allauth's own login/signup pages to YOUR custom pages
+ACCOUNT_LOGIN_METHODS             = {'email'}
+ACCOUNT_USER_MODEL_USERNAME_FIELD = None
+ACCOUNT_EMAIL_VERIFICATION        = 'optional'
+
 ACCOUNT_LOGIN_URL                 = '/accounts/login/'
 ACCOUNT_SIGNUP_URL                = '/accounts/register/'
 SOCIALACCOUNT_LOGIN_CANCELLED_URL = '/accounts/login/'
 
-# After Google login, go to dashboard
 SOCIALACCOUNT_AUTO_SIGNUP    = True
 SOCIALACCOUNT_LOGIN_ON_GET   = True
 
@@ -139,29 +138,16 @@ SOCIALACCOUNT_PROVIDERS = {
 
 
 # ── Email ──────────────────────────────────────────────────────────────────────
-# To use Gmail SMTP, set these in your .env file:
-#   EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
-#   EMAIL_HOST=smtp.gmail.com
-#   EMAIL_PORT=587
-#   EMAIL_USE_TLS=True
-#   EMAIL_HOST_USER=your@gmail.com
-#   EMAIL_HOST_PASSWORD=your_gmail_app_password   ← App Password, NOT your real password
-#
-# To get Gmail App Password:
-#   Google Account → Security → 2-Step Verification → App Passwords → Create
-#
-# While EMAIL_BACKEND is not set in .env, it falls back to console (prints to terminal)
-
 EMAIL_BACKEND     = os.environ.get(
     "EMAIL_BACKEND",
     "django.core.mail.backends.console.EmailBackend"
 )
-EMAIL_HOST        = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
-EMAIL_PORT        = int(os.environ.get("EMAIL_PORT", 587))
-EMAIL_USE_TLS     = os.environ.get("EMAIL_USE_TLS", "True") == "True"
-EMAIL_HOST_USER   = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST          = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT          = int(os.environ.get("EMAIL_PORT", 587))
+EMAIL_USE_TLS       = os.environ.get("EMAIL_USE_TLS", "True") == "True"
+EMAIL_HOST_USER     = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
-DEFAULT_FROM_EMAIL = os.environ.get("EMAIL_HOST_USER", "noreply@smartfishfarm.local")
+DEFAULT_FROM_EMAIL  = os.environ.get("EMAIL_HOST_USER", "noreply@smartfishfarm.local")
 
 FARM_NOTIFICATION_EMAIL = os.environ.get("FARM_NOTIFICATION_EMAIL", "farmer@example.com")
 
@@ -179,17 +165,16 @@ WEATHER_LOCATION = os.environ.get("OPENWEATHER_LOCATION", "Chandpur,Bangladesh")
 
 
 # ── Farm analytics defaults ────────────────────────────────────────────────────
-FEED_COST_PER_KG    = float(os.environ.get("FEED_COST_PER_KG", "1.20"))
-DEFAULT_FCR         = float(os.environ.get("DEFAULT_FCR", "1.50"))
+FEED_COST_PER_KG        = float(os.environ.get("FEED_COST_PER_KG", "1.20"))
+DEFAULT_FCR             = float(os.environ.get("DEFAULT_FCR", "1.50"))
 DEFAULT_MARKET_WEIGHT_G = float(os.environ.get("DEFAULT_MARKET_WEIGHT_G", "500"))
 
 
 # ── Celery ─────────────────────────────────────────────────────────────────────
-# For production use Redis:
-#   CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0")
-#   CELERY_RESULT_BACKEND = CELERY_BROKER_URL
-CELERY_BROKER_URL    = "memory://"
-CELERY_RESULT_BACKEND = "rpc://"
+#CELERY_BROKER_URL     = "memory://"
+#CELERY_RESULT_BACKEND = "rpc://"
+CELERY_BROKER_URL = "redis://localhost:6379/0"
+CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 
 
 # ── Internationalisation ───────────────────────────────────────────────────────
