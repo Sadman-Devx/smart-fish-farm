@@ -168,7 +168,18 @@ def profile_view(request):
         form.save()
         messages.success(request, "Profile updated.")
         return redirect("accounts:profile")
-    return render(request, "accounts/profile.html", {"form": form})
+    
+    # FarmProfile আনো
+    try:
+        from farm.models import FarmProfile
+        farm_profile = request.user.farm_profile
+    except Exception:
+        farm_profile = None
+
+    return render(request, "accounts/profile.html", {
+        "form": form,
+        "farm_profile": farm_profile,
+    })
 
 
 @login_required
@@ -249,3 +260,14 @@ def register_view(request):
         return redirect("farm:onboarding_step1")
 
     return render(request, "accounts/register.html", {"form": form})
+
+
+@require_POST
+@login_required
+def toggle_2fa_view(request):
+    user = request.user
+    user.two_factor_enabled = not user.two_factor_enabled
+    user.save()
+    status = "enabled" if user.two_factor_enabled else "disabled"
+    messages.success(request, f"Two-factor authentication {status}.")
+    return redirect("accounts:profile")

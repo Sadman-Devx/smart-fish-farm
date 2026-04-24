@@ -21,49 +21,196 @@
 
 {% block content %}
 
-{# ── Weather bar ──────────────────────────────────────── #}
-{% if daily_api_temp_c %}
-<div class="weather-bar">
-  <div class="weather-left">
-    <span class="weather-icon">⛅</span>
-    <div style="min-width:0">
-      <div class="fs-xs text-muted" style="margin-bottom:3px;white-space:nowrap">
-        {{ daily_api_location|default:"—" }} · {{ daily_api_date }}
+{# ── Enhanced Weather Widget ── #}
+{% if farm_weather or daily_api_temp_c %}
+<div style="margin-bottom:16px">
+
+  {# Weather Info Row #}
+  <div class="weather-bar" style="flex-wrap:wrap;gap:12px">
+    <div class="weather-left" style="flex-wrap:wrap;gap:12px">
+      <span class="weather-icon">
+        {% if farm_weather %}
+          {% if farm_weather.condition == "Rain" %}🌧️
+          {% elif farm_weather.condition == "Clouds" %}☁️
+          {% elif farm_weather.condition == "Clear" %}☀️
+          {% elif farm_weather.condition == "Thunderstorm" %}⛈️
+          {% else %}⛅{% endif %}
+        {% else %}⛅{% endif %}
+      </span>
+
+      <div style="min-width:0">
+        <div class="fs-xs text-muted" style="margin-bottom:3px;white-space:nowrap">
+          {% if request.user.is_authenticated %}
+            {% if request.user.farm_profile.farm_name %}
+              {{ request.user.farm_profile.farm_name }}
+            {% else %}
+              {{ daily_api_location|default:"Your Farm" }}
+            {% endif %}
+          {% else %}
+            {{ daily_api_location|default:"—" }}
+          {% endif %}
+          · {{ daily_api_date }}
+        </div>
+        <div style="display:flex;align-items:baseline;gap:8px">
+          <span class="weather-temp">
+            {% if farm_weather %}{{ farm_weather.temp_c|floatformat:1 }}
+            {% else %}{{ daily_api_temp_c|floatformat:1 }}{% endif %}°C
+          </span>
+          <span class="text-muted fs-sm">
+            {% if farm_weather %}{{ farm_weather.condition }}
+            {% else %}{{ daily_api_condition }}{% endif %}
+          </span>
+        </div>
       </div>
-      <div style="display:flex;align-items:baseline;gap:8px">
-        <span class="weather-temp">{{ daily_api_temp_c|floatformat:1 }}°C</span>
-        <span class="text-muted fs-sm" style="white-space:nowrap">{{ daily_api_condition }}</span>
+
+      {% if farm_weather %}
+      <div class="weather-divider"></div>
+      <div class="weather-detail">
+        <strong>Humidity</strong>
+        {{ farm_weather.humidity }}%
       </div>
-    </div>
-    <div class="weather-divider"></div>
-    <div class="weather-detail">
-      <strong>API Feed Rate</strong>
-      {{ daily_api_feed_percent|floatformat:0 }}% of biomass
-    </div>
-    {% if avg_recent_temp_c %}
-    <div class="weather-divider"></div>
-    <div class="weather-detail">
-      <strong>Avg Water Temp</strong>
-      {{ avg_recent_temp_c }}°C (recent)
-    </div>
-    {% endif %}
-  </div>
-  <div class="weather-tags">
-    {% with temp=daily_api_temp_c|floatformat:0 %}
-      {% if temp >= "28" %}
-        <span class="pill pill-success">Good feeding temp</span>
-      {% elif temp >= "22" %}
-        <span class="pill pill-info">Moderate temp</span>
-      {% else %}
-        <span class="pill pill-warn">Low temp — reduce feed</span>
+      <div class="weather-divider"></div>
+      <div class="weather-detail">
+        <strong>Rain</strong>
+        {{ farm_weather.rain_mm|floatformat:1 }} mm
+      </div>
       {% endif %}
-    {% endwith %}
-    <span class="pill pill-accent">{{ recommended_feed_source_label }}</span>
+
+      <div class="weather-divider"></div>
+      <div class="weather-detail">
+        <strong>Feed Rate</strong>
+        {{ daily_api_feed_percent|floatformat:0|default:"—" }}% of biomass
+      </div>
+
+      {% if avg_recent_temp_c %}
+      <div class="weather-divider"></div>
+      <div class="weather-detail">
+        <strong>Avg Water Temp</strong>
+        {{ avg_recent_temp_c }}°C
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="weather-tags" style="align-items:center;gap:8px">
+      {% if request.user.is_authenticated %}
+      <form method="post" action="{% url 'farm:refresh_weather' %}" style="margin:0">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm btn-outline"
+          style="padding:4px 10px;font-size:11px">
+          🔄 Refresh
+        </button>
+      </form>
+      {% endif %}
+      <span class="pill pill-accent">{{ recommended_feed_source_label }}</span>
+    </div>
   </div>
+
+  {# ── Feeding Suggestion Box ── #}
+  {% if feeding_suggest %}
+  <div style="margin-top:10px;padding:12px 16px;border-radius:10px;
+    {% if feeding_suggest.status == 'success' %}
+      background:rgba(0,229,180,.08);border:1px solid rgba(0,229,180,.2);
+    {% elif feeding_suggest.status == 'warning' %}
+      background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);
+    {% elif feeding_suggest.status == 'danger' %}
+      background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);
+    {% else %}
+      background:rgba(99,179,237,.08);border:1px solid rgba(99,179,237,.2);
+    {% endif %}
+    display:flex;align-items:center;gap:12px">
+    <span style="font-size:20px">{{ feeding_suggest.icon }}</span>
+    <div>
+      <div style="font-weight:700;font-size:13px;
+        {% if feeding_suggest.status == 'success' %}color:var(--success)
+        {% elif feeding_suggest.status == 'warning' %}color:#fbbf24
+        {% elif feeding_suggest.status == 'danger' %}color:var(--danger)
+        {% else %}color:#63b3ed{% endif %}">
+        {{ feeding_suggest.title }}
+      </div>
+      <div class="fs-xs text-muted" style="margin-top:2px">
+        {{ feeding_suggest.message }}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Today's Feeding Schedule ── #}
+  {% if request.user.is_authenticated and active_batches %}
+  <div class="card" style="margin-top:12px">
+    <div class="card-header">
+      <span class="card-title">🕕 Today's Feeding Schedule</span>
+      <span class="fs-xs text-muted">
+        Given: {{ today_feed_given_kg }} kg /
+        Recommended: {{ recommended_feed_today_kg }} kg
+      </span>
+    </div>
+    <div class="card-body" style="padding:10px 14px">
+
+      {# Progress bar #}
+      {% if recommended_feed_today_kg > 0 %}
+      <div style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;
+          font-size:11px;color:var(--muted);margin-bottom:4px">
+          <span>Feed Progress Today</span>
+          <span>{{ today_feed_given_kg }} / {{ recommended_feed_today_kg }} kg</span>
+        </div>
+        <div style="height:6px;background:var(--surface2);border-radius:3px;overflow:hidden">
+          <div style="height:100%;border-radius:3px;background:var(--accent);
+            width:{% widthratio today_feed_given_kg recommended_feed_today_kg 100 %}%">
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      {# Batch schedule #}
+      <div style="display:flex;flex-direction:column;gap:8px">
+        {% for batch in active_batches %}
+        <div style="display:flex;align-items:center;justify-content:space-between;
+          padding:8px 10px;background:var(--surface2);border-radius:8px;flex-wrap:wrap;gap:8px">
+          <div>
+            <span style="font-weight:600;font-size:13px">{{ batch.pond.name }}</span>
+            <span class="fs-xs text-muted" style="margin-left:6px">
+              {{ batch.get_species_display }}
+            </span>
+          </div>
+          <div style="display:flex;gap:16px;font-size:12px;flex-wrap:wrap">
+            <span>
+              🌅 Morning:
+              <strong>{{ batch.latest_biomass_kg|floatformat:2 }}</strong> kg × 60%
+            </span>
+            <span class="text-muted">
+              🌆 Evening: × 40%
+            </span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      {# Mark feeding done buttons #}
+      {% if pending_reminders %}
+      <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px">
+        {% for reminder in pending_reminders %}
+        <form method="post" action="{% url 'farm:mark_feeding_done' %}" style="margin:0">
+          {% csrf_token %}
+          <input type="hidden" name="reminder_id" value="{{ reminder.pk }}">
+          <button type="submit" class="btn btn-sm"
+            style="background:rgba(0,229,180,.1);color:var(--accent);
+                   border:1px solid rgba(0,229,180,.2)">
+            ✓ Mark Done — {{ reminder.batch.pond.name }}
+          </button>
+        </form>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+  {% endif %}
+
 </div>
 {% endif %}
 
-{# ── Reminder alert (auth users only) ─────────────────── #}
+{# ── Reminder alert (auth users only) ── #}
 {% if request.user.is_authenticated and reminders_today %}
 <div class="alert-strip">
   <span style="font-size:16px;flex-shrink:0">⚠</span>
@@ -72,7 +219,51 @@
 </div>
 {% endif %}
 
-{# ── KPI cards ──────────────────────────────────────────── #}
+{# ── Water Quality Critical Alerts ── #}
+{% if critical_alerts %}
+{% for alert in critical_alerts %}
+<div style="display:flex;align-items:center;gap:12px;
+  padding:12px 16px;border-radius:10px;margin-bottom:8px;
+  background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3)">
+  <span style="font-size:20px;flex-shrink:0">🚨</span>
+  <div style="flex:1">
+    <div style="font-weight:700;font-size:13px;color:var(--danger)">
+      CRITICAL ALERT — {{ alert.get_alert_type_display }}
+    </div>
+    <div class="fs-xs text-muted" style="margin-top:2px">
+      {{ alert.message }}
+    </div>
+  </div>
+  {% if request.user.is_authenticated %}
+  <form method="post" action="{% url 'farm:alert_resolve' alert.pk %}" style="margin:0">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-sm"
+      style="background:rgba(239,68,68,.15);color:var(--danger);
+             border:1px solid rgba(239,68,68,.3);white-space:nowrap">
+      ✓ Resolve
+    </button>
+  </form>
+  {% endif %}
+</div>
+{% endfor %}
+{% endif %}
+
+{# ── Warning Alerts ── #}
+{% if unresolved_alerts and not critical_alerts %}
+<div class="alert-strip" style="border-color:rgba(251,191,36,.3);background:rgba(251,191,36,.05)">
+  <span style="font-size:16px;flex-shrink:0">⚠️</span>
+  <span style="color:#fbbf24">
+    <strong>{{ unresolved_alerts }} water quality alert{{ unresolved_alerts|pluralize }}</strong>
+    need attention
+  </span>
+  <a href="{% url 'farm:alert_list' %}"
+     style="margin-left:auto;white-space:nowrap;color:#fbbf24">
+    View alerts →
+  </a>
+</div>
+{% endif %}
+
+{# ── KPI cards ── #}
 <div class="kpi-grid">
   <div class="kpi-card k-teal">
     <div class="kpi-label">Total Ponds</div>
@@ -99,7 +290,13 @@
     <div class="kpi-value">{{ reminders_today }} <small>pending</small></div>
     <div class="kpi-meta">Feeding schedule</div>
   </div>
-  {% if daily_api_temp_c %}
+  {% if farm_weather %}
+  <div class="kpi-card k-purple">
+    <div class="kpi-label">Farm Temperature</div>
+    <div class="kpi-value">{{ farm_weather.temp_c|floatformat:1 }} <small>°C</small></div>
+    <div class="kpi-meta">{{ farm_weather.condition }} · {{ farm_weather.humidity }}% humidity</div>
+  </div>
+  {% elif daily_api_temp_c %}
   <div class="kpi-card k-purple">
     <div class="kpi-label">API Temperature</div>
     <div class="kpi-value">{{ daily_api_temp_c|floatformat:1 }} <small>°C</small></div>
@@ -108,7 +305,7 @@
   {% endif %}
 </div>
 
-{# ── Active Batches + Reminders ─────────────────────────── #}
+{# ── Active Batches + Reminders ── #}
 <div style="display:grid;grid-template-columns:1fr 340px;gap:16px">
 
   <div class="card">
@@ -177,7 +374,7 @@
 
 </div>
 
-{# ── Ponds grid ─────────────────────────────────────────── #}
+{# ── Ponds grid ── #}
 <div>
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
     <span class="card-title" style="font-size:15px">Ponds</span>
@@ -204,7 +401,7 @@
   </div>
 </div>
 
-{# ── Daily Feed & Temperature table ─────────────────────── #}
+{# ── Daily Feed & Temperature table ── #}
 <div class="card">
   <div class="card-header">
     <span class="card-title">Daily Feed & Temperature (Last 14 Days)</span>
@@ -251,7 +448,7 @@
   {% endif %}
 </div>
 
-{# ── Recent Feed log ─────────────────────────────────────── #}
+{# ── Recent Feed log ── #}
 <div class="card">
   <div class="card-header">
     <span class="card-title">Recent Feeding (Last 7 Logs)</span>
@@ -263,7 +460,7 @@
   </div>
   {% if recent_feed %}
   <div class="table-responsive">
-    <table class="table  recent-feed-table">
+    <table class="table recent-feed-table">
       <thead>
         <tr><th>Date</th><th>Batch</th><th class="text-end">Feed (kg)</th><th class="text-end">Mode</th></tr>
       </thead>
@@ -290,7 +487,7 @@
   {% endif %}
 </div>
 
-{# ── Charts ─────────────────────────────────────────────── #}
+{# ── Charts ── #}
 <div>
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
     <span class="card-title" style="font-size:15px">Analytics</span>

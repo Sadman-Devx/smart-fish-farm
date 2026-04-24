@@ -33,6 +33,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
+from .services.weather_ingest import get_weather_for_location, get_feeding_suggestion
 
 from .models import (
     FeedLog, FeedingProfile, FeedingReminder, FishBatch,
@@ -55,32 +56,60 @@ from .tasks import send_daily_feed_alert
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _generate_water_alerts(weather_record: WeatherRecord) -> None:
-    """Auto-create FarmAlert entries when water readings are out of range."""
+    """Auto-create FarmAlert entries and send email when water readings are out of range."""
+    from .notifications import send_email_notification
+
     pond = weather_record.pond
     temp = float(weather_record.water_temp_c)
     do   = float(weather_record.dissolved_oxygen_mg_l)
     ph   = float(weather_record.ph)
 
     checks = [
-        (do < 4.0,              "low_oxygen", "critical", f"Pond {pond.name}: DO critically low at {do} mg/L (min 4.0)"),
-        (do < 5.0,              "low_oxygen", "warning",  f"Pond {pond.name}: DO below optimum at {do} mg/L"),
-        (temp > 34.0,           "high_temp",  "critical", f"Pond {pond.name}: Water temp critically high at {temp}°C"),
-        (temp > 31.0,           "high_temp",  "warning",  f"Pond {pond.name}: Water temp elevated at {temp}°C"),
-        (temp < 15.0,           "low_temp",   "warning",  f"Pond {pond.name}: Water temp low at {temp}°C — reduce feed"),
-        (ph < 6.5 or ph > 9.0, "ph_out",     "warning",  f"Pond {pond.name}: pH out of range at {ph}"),
+        (do < 4.0,              "low_oxygen", "critical", f"🚨 CRITICAL: Pond {pond.name}: DO critically low at {do} mg/L (min 4.0) — fish may die!"),
+        (do < 5.0,              "low_oxygen", "warning",  f"⚠️ WARNING: Pond {pond.name}: DO below optimum at {do} mg/L — check aeration"),
+        (temp > 34.0,           "high_temp",  "critical", f"🚨 CRITICAL: Pond {pond.name}: Water temp critically high at {temp}°C — urgent action needed!"),
+        (temp > 31.0,           "high_temp",  "warning",  f"⚠️ WARNING: Pond {pond.name}: Water temp elevated at {temp}°C — reduce feed"),
+        (temp < 15.0,           "low_temp",   "warning",  f"⚠️ WARNING: Pond {pond.name}: Water temp low at {temp}°C — reduce feed significantly"),
+        (ph < 6.5 or ph > 9.0, "ph_out",     "warning",  f"⚠️ WARNING: Pond {pond.name}: pH out of range at {ph} (safe: 6.5–9.0)"),
     ]
 
+    new_alerts = []
     for condition, atype, level, msg in checks:
         if condition:
             exists = FarmAlert.objects.filter(
                 pond=pond, alert_type=atype, resolved=False
             ).exists()
             if not exists:
-                FarmAlert.objects.create(
+                alert = FarmAlert.objects.create(
                     pond=pond, alert_type=atype, level=level, message=msg
                 )
+                new_alerts.append(alert)
 
+    # নতুন alert হলে email পাঠাও
+    if new_alerts:
+        subject = f"🚨 AquaSmart Water Quality Alert — {pond.name}"
+        lines = [
+            f"Water Quality Alert for Pond: {pond.name}",
+            f"Logged at: {weather_record.timestamp.strftime('%Y-%m-%d %H:%M')}",
+            "",
+            "📊 Current Readings:",
+            f"  🌡️  Water Temperature : {temp}°C",
+            f"  💧 Dissolved Oxygen  : {do} mg/L",
+            f"  🧪 pH Level          : {ph}",
+            "",
+            "⚠️ Alerts Triggered:",
+        ]
+        for alert in new_alerts:
+            lines.append(f"  • [{alert.level.upper()}] {alert.message}")
 
+        lines += [
+            "",
+            "Please take immediate action to prevent fish loss.",
+            "Login to AquaSmart dashboard to resolve these alerts.",
+        ]
+        send_email_notification(subject, "\n".join(lines))
+
+        
 def _generate_harvest_due_alerts() -> None:
     """Create harvest-due alerts for batches within 7 days of estimated harvest."""
     for batch in FishBatch.objects.prefetch_related("growth_records"):
@@ -119,6 +148,37 @@ def dashboard(request):
 
     # ── Weather ────────────────────────────────────────────────────────────────
     daily_api_weather = get_or_update_daily_weather()
+    # ── User's farm location weather ──────────────────────────────────────────
+    farm_weather     = None
+    feeding_suggest  = None
+
+    if request.user.is_authenticated:
+        try:
+            fp = request.user.farm_profile
+            if fp.latitude and fp.longitude:
+                farm_weather = get_weather_for_location(
+                    float(fp.latitude), float(fp.longitude)
+                )
+            elif fp.district:
+                # District দিয়ে weather fetch করো
+                from .services.weather_ingest import get_weather_by_city
+                location_query = f"{fp.upazila},{fp.district},BD" if fp.upazila else f"{fp.district},BD"
+                farm_weather = get_weather_by_city(location_query)
+            elif fp.weather_temp_c:
+                farm_weather = {
+                    "temp_c":    float(fp.weather_temp_c),
+                    "humidity":  fp.weather_humidity_pct or 0,
+                    "rain_mm":   float(fp.weather_rain_mm or 0),
+                    "condition": fp.weather_condition or "—",
+                }
+            if farm_weather:
+                feeding_suggest = get_feeding_suggestion(
+                    farm_weather["temp_c"],
+                    farm_weather["humidity"],
+                    farm_weather["rain_mm"],
+                )
+        except Exception:
+            pass
 
     # ── Core querysets ─────────────────────────────────────────────────────────
     ponds = Pond.objects.all().annotate(
@@ -289,6 +349,8 @@ def dashboard(request):
         weather_temp_values=weather_temp_values,
         unresolved_alerts=unresolved_alerts,
         critical_alerts=critical_alerts,
+        farm_weather=farm_weather,
+        feeding_suggest=feeding_suggest,
     )
     return render(request, "farm/dashboard.html", context)
 
@@ -636,4 +698,52 @@ def send_test_alert(request):
     except Exception:
         send_daily_feed_alert()
         messages.warning(request, "Broker unavailable — sent synchronously.")
+    return redirect("farm:dashboard")
+
+@require_POST
+@login_required
+def refresh_weather_view(request):
+    try:
+        from farm.models import FarmProfile
+        from .services.weather_ingest import get_weather_for_location, get_weather_by_city
+        fp = request.user.farm_profile
+        data = None
+
+        if fp.latitude and fp.longitude:
+            data = get_weather_for_location(
+                float(fp.latitude), float(fp.longitude)
+            )
+        elif fp.district:
+            location_query = f"{fp.upazila},{fp.district},BD" if fp.upazila else f"{fp.district},BD"
+            data = get_weather_by_city(location_query)
+
+        if data:
+            from django.utils import timezone
+            fp.weather_temp_c       = data["temp_c"]
+            fp.weather_humidity_pct = data["humidity"]
+            fp.weather_rain_mm      = data["rain_mm"]
+            fp.weather_condition    = data["condition"]
+            fp.weather_fetched_at   = timezone.now()
+            fp.save()
+            messages.success(request, "Weather updated successfully!")
+        else:
+            messages.error(request, "Could not fetch weather. Try again.")
+
+    except Exception:
+        messages.error(request, "Farm profile not found.")
+    return redirect("farm:dashboard")
+
+@require_POST
+@login_required
+def mark_feeding_done_view(request):
+    """Mark a feeding reminder as done."""
+    reminder_id = request.POST.get("reminder_id")
+    if reminder_id:
+        reminder = FeedingReminder.objects.filter(
+            pk=reminder_id, batch__pond__in=Pond.objects.all()
+        ).first()
+        if reminder:
+            reminder.sent = True
+            reminder.save()
+            messages.success(request, "Feeding marked as done!")
     return redirect("farm:dashboard")

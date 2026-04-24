@@ -5,7 +5,7 @@ Django settings for smart_fish_farm project.
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-
+from celery.schedules import crontab
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
@@ -175,6 +175,13 @@ DEFAULT_MARKET_WEIGHT_G = float(os.environ.get("DEFAULT_MARKET_WEIGHT_G", "500")
 #CELERY_RESULT_BACKEND = "rpc://"
 CELERY_BROKER_URL = "redis://localhost:6379/0"
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL
+
+CELERY_BEAT_SCHEDULE = {
+    "daily-feed-alert-6am": {
+        "task":     "farm.tasks.send_daily_feed_alert",
+        "schedule": crontab(hour=6, minute=0),
+    },
+}
 
 
 # ── Internationalisation ───────────────────────────────────────────────────────

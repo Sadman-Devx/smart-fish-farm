@@ -28,7 +28,7 @@ html, body { height: 100%; margin: 0; padding: 0; }
 body {
   background: var(--bg) !important;
   color: var(--text) !important;
-  font-family: 'Space Grotesk', system-ui, sans-serif !important;
+  font-family: 'Plus Jakarta Sans', sans-serif !important;
   font-size: 14px;
   line-height: 1.5;
 }

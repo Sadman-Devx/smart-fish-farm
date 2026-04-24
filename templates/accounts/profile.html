@@ -91,6 +91,29 @@
           <a href="{% url 'accounts:change_password' %}" class="btn btn-sm btn-outline w-100"
              style="justify-content:center">Change Password</a>
         </div>
+        <div style="margin-top:12px">
+          <form method="post" action="{% url 'accounts:toggle_2fa' %}">
+            {% csrf_token %}
+            {% if request.user.two_factor_enabled %}
+              <button type="submit" class="btn btn-sm w-100"
+                style="background:rgba(239,68,68,.15);color:var(--danger);
+                       border:1px solid rgba(239,68,68,.3);justify-content:center;
+                       margin-bottom:8px">
+                Disable 2FA
+              </button>
+            {% else %}
+              <button type="submit" class="btn btn-sm w-100"
+                style="background:rgba(0,229,180,.15);color:var(--accent);
+                       border:1px solid rgba(0,229,180,.3);justify-content:center;
+                       margin-bottom:8px">
+                Enable 2FA
+              </button>
+              <div class="fs-xs text-muted" style="text-align:center">
+                ⚠️ Make sure your email is accessible — OTP will be sent there
+              </div>
+            {% endif %}
+          </form>
+        </div>
       </div>
     </div>
 
@@ -111,5 +134,50 @@
     </div>
   </div>
 
+</div>
+{# ── My Farm section ── #}
+<div class="card" style="margin-top:20px">
+  <div class="card-header">
+    <span class="card-title">🐟 My Farm</span>
+    {% if farm_profile and farm_profile.onboarding_complete %}
+      <a href="{% url 'farm:onboarding_step1' %}" class="btn btn-sm btn-outline">Edit Farm Info</a>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    {% if farm_profile and farm_profile.onboarding_complete %}
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+
+        <div>
+          <div class="fs-xs text-muted" style="margin-bottom:8px">🏡 Farm Basics</div>
+          <div class="sensor-row"><span class="sensor-label">Farm Name</span><span class="sensor-val">{{ farm_profile.farm_name|default:"—" }}</span></div>
+          <div class="sensor-row"><span class="sensor-label">Size</span><span class="sensor-val">{{ farm_profile.size_acres|default:"—" }} acres</span></div>
+          <div class="sensor-row"><span class="sensor-label">Ponds</span><span class="sensor-val">{{ farm_profile.num_ponds|default:"—" }}</span></div>
+          <div class="sensor-row"><span class="sensor-label">Water Source</span><span class="sensor-val">{{ farm_profile.get_water_source_display|default:"—" }}</span></div>
+        </div>
+
+        <div>
+          <div class="fs-xs text-muted" style="margin-bottom:8px">📍 Location & Fish</div>
+          <div class="sensor-row"><span class="sensor-label">Location</span><span class="sensor-val fs-sm">{{ farm_profile.location_display }}</span></div>
+          <div class="sensor-row"><span class="sensor-label">Species</span><span class="sensor-val fs-sm">{{ farm_profile.species|join:", "|default:"—" }}</span></div>
+          <div class="sensor-row"><span class="sensor-label">Experience</span><span class="sensor-val">{{ farm_profile.farming_experience_years|default:"—" }} yrs</span></div>
+        </div>
+
+        <div>
+          <div class="fs-xs text-muted" style="margin-bottom:8px">🌤️ Weather</div>
+          <div class="sensor-row"><span class="sensor-label">Temperature</span><span class="sensor-val">{{ farm_profile.weather_temp_c|default:"—" }}°C</span></div>
+          <div class="sensor-row"><span class="sensor-label">Humidity</span><span class="sensor-val">{{ farm_profile.weather_humidity_pct|default:"—" }}%</span></div>
+          <div class="sensor-row"><span class="sensor-label">Rain</span><span class="sensor-val">{{ farm_profile.weather_rain_mm|default:"0" }} mm</span></div>
+          <div class="sensor-row"><span class="sensor-label">Condition</span><span class="sensor-val">{{ farm_profile.weather_condition|default:"—" }}</span></div>
+        </div>
+
+      </div>
+    {% else %}
+      <div style="text-align:center;padding:24px 0">
+        <div style="font-size:32px;margin-bottom:8px">🐟</div>
+        <div style="color:var(--muted);margin-bottom:16px">You haven't set up your farm yet.</div>
+        <a href="{% url 'farm:onboarding_step1' %}" class="btn btn-accent">Setup Farm →</a>
+      </div>
+    {% endif %}
+  </div>
 </div>
 {% endblock %}

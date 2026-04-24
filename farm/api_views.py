@@ -66,11 +66,17 @@ class GrowthRecordListAPI(generics.ListCreateAPIView):
 class WeatherRecordListAPI(generics.ListCreateAPIView):
     """
     GET  /api/weather-records/  — public
-    POST /api/weather-records/  — authenticated only
+    POST /api/weather-records/  — authenticated only (IoT sensor or manual)
     """
     queryset           = WeatherRecord.objects.all().order_by("-timestamp")
     serializer_class   = WeatherRecordSerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def perform_create(self, serializer):
+        record = serializer.save()
+        # IoT sensor data আসলে automatically alert check করো
+        from .views import _generate_water_alerts
+        _generate_water_alerts(record)
 
 
 class FeedLogListAPI(generics.ListCreateAPIView):
