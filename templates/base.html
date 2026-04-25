@@ -40,8 +40,6 @@
 </head>
 <body>
 
-{# ── NO JS redirect — guests are allowed to browse ── #}
-
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
 <div class="shell">
@@ -68,7 +66,6 @@
         <span class="nav-icon">◯</span> Ponds
       </a>
 
-      {# Write-action nav items — only shown to logged-in users #}
       {% if request.user.is_authenticated %}
         <a href="{% url 'farm:weather_create' %}"
            class="nav-item {% block nav_weather %}{% endblock %}">
@@ -87,20 +84,19 @@
           <span class="nav-icon">💀</span> Log Mortality
         </a>
       {% else %}
-        {# Show disabled-style placeholders so guests understand what exists #}
-        <span class="nav-item" style="opacity:.38;cursor:not-allowed;pointer-events:none" title="Sign in to log data">
+        <span class="nav-item" style="opacity:.38;cursor:not-allowed;pointer-events:none">
           <span class="nav-icon">🌡</span> Log Water Quality
           <span class="nav-badge" style="font-size:9px;opacity:.7">🔒</span>
         </span>
-        <span class="nav-item" style="opacity:.38;cursor:not-allowed;pointer-events:none" title="Sign in to log data">
+        <span class="nav-item" style="opacity:.38;cursor:not-allowed;pointer-events:none">
           <span class="nav-icon">📈</span> Log Growth
           <span class="nav-badge" style="font-size:9px;opacity:.7">🔒</span>
         </span>
-        <span class="nav-item" style="opacity:.38;cursor:not-allowed;pointer-events:none" title="Sign in to log data">
+        <span class="nav-item" style="opacity:.38;cursor:not-allowed;pointer-events:none">
           <span class="nav-icon">🪣</span> Log Feed
           <span class="nav-badge" style="font-size:9px;opacity:.7">🔒</span>
         </span>
-        <span class="nav-item" style="opacity:.38;cursor:not-allowed;pointer-events:none" title="Sign in to log data">
+        <span class="nav-item" style="opacity:.38;cursor:not-allowed;pointer-events:none">
           <span class="nav-icon">💀</span> Log Mortality
           <span class="nav-badge" style="font-size:9px;opacity:.7">🔒</span>
         </span>
@@ -134,6 +130,10 @@
       <a href="{% url 'farm:daily_feed_report' %}"
          class="nav-item {% block nav_report %}{% endblock %}">
         <span class="nav-icon">◫</span> Daily Feed Report
+      </a>
+      <a href="{% url 'farm:mortality_report' %}"
+         class="nav-item {% block nav_mortality_report %}{% endblock %}">
+        <span class="nav-icon">📉</span> Mortality Report
       </a>
       <a href="{% url 'farm:reminder_list' %}"
          class="nav-item {% block nav_reminders %}{% endblock %}">
@@ -206,7 +206,7 @@
   <!-- ── Main ────────────────────────────────────────── -->
   <div class="main">
 
-    {# ── Guest banner (shown only to anonymous visitors) ── #}
+    {# ── Guest banner ── #}
     {% if not request.user.is_authenticated %}
     <div class="guest-banner">
       <span>
@@ -223,12 +223,8 @@
     <!-- ── Topbar ── -->
     <div class="topbar">
       <div class="topbar-left">
-        <button class="hamburger"
-                id="hamburgerBtn"
-                aria-label="Toggle menu">☰</button>
-        <span class="topbar-title">
-          {% block topbar_title %}Dashboard{% endblock %}
-        </span>
+        <button class="hamburger" id="hamburgerBtn" aria-label="Toggle menu">☰</button>
+        <span class="topbar-title">{% block topbar_title %}Dashboard{% endblock %}</span>
         <span class="indicator"></span>
         <span class="fs-xs text-muted">Live</span>
       </div>
@@ -293,7 +289,6 @@
 
 </div><!-- /.shell -->
 
-<!-- ── Sidebar toggle script ── -->
 <script>
 (function () {
   var btn     = document.getElementById('hamburgerBtn');

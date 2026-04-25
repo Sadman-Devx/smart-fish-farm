@@ -20,6 +20,11 @@ Bug fixes (2026-04):
          exact DailyWeather → most-recent DailyWeather → pond WeatherRecord → 26 °C
     2. dashboard() — source label updated to show "Default temp (26°C)"
        so operators know which temperature was used.
+
+Analytics additions (2026-04):
+  Feature 1 — Enhanced batch_detail with growth chart + summary card
+  Feature 2 — Enhanced profit/loss with expense breakdown & 6-month trends
+  Feature 3 — New mortality_report view with cause breakdown & trends
 """
 from datetime import timedelta, date
 from decimal import Decimal
@@ -85,7 +90,6 @@ def _generate_water_alerts(weather_record: WeatherRecord) -> None:
                 )
                 new_alerts.append(alert)
 
-    # নতুন alert হলে email পাঠাও
     if new_alerts:
         subject = f"🚨 AquaSmart Water Quality Alert — {pond.name}"
         lines = [
@@ -109,7 +113,7 @@ def _generate_water_alerts(weather_record: WeatherRecord) -> None:
         ]
         send_email_notification(subject, "\n".join(lines))
 
-        
+
 def _generate_harvest_due_alerts() -> None:
     """Create harvest-due alerts for batches within 7 days of estimated harvest."""
     for batch in FishBatch.objects.prefetch_related("growth_records"):
@@ -148,7 +152,6 @@ def dashboard(request):
 
     # ── Weather ────────────────────────────────────────────────────────────────
     daily_api_weather = get_or_update_daily_weather()
-    # ── User's farm location weather ──────────────────────────────────────────
     farm_weather     = None
     feeding_suggest  = None
 
@@ -160,7 +163,6 @@ def dashboard(request):
                     float(fp.latitude), float(fp.longitude)
                 )
             elif fp.district:
-                # District দিয়ে weather fetch করো
                 from .services.weather_ingest import get_weather_by_city
                 location_query = f"{fp.upazila},{fp.district},BD" if fp.upazila else f"{fp.district},BD"
                 farm_weather = get_weather_by_city(location_query)
@@ -235,17 +237,12 @@ def dashboard(request):
     )
     feed_daily.reverse()
 
-    # Avg pond temperature per day (display only — does not affect calculation)
     weather_daily = list(
         WeatherRecord.objects.annotate(day=TruncDate("timestamp"))
         .values("day").annotate(avg_temp_c=Avg("water_temp_c")).order_by("-day")[:21]
     )
     temp_by_day = {r["day"]: float(r["avg_temp_c"]) for r in weather_daily if r["day"]}
 
-    # ── FIX: recommended-feed column ──────────────────────────────────────────
-    # smart_feed_kg_for_batch() now falls back through:
-    #   exact DailyWeather → latest DailyWeather → pond WeatherRecord → 26°C
-    # so it returns a real value for every past date that had no API record.
     daily_feed_temp_rows        = []
     target_actual_labels        = []
     target_actual_actual_values = []
@@ -265,15 +262,13 @@ def dashboard(request):
             "date":                day,
             "feed_kg":             round(float(row["total_feed_kg"]), 2),
             "temp_c":              round(temp_by_day[day], 1) if day in temp_by_day else None,
-            # Only show None (→ "—") if the service genuinely couldn't compute
-            # (i.e. no FeedingProfile configured at all).
             "recommended_feed_kg": round(rec_kg, 2) if has_recommendation_data else None,
         })
         target_actual_labels.append(str(day))
         target_actual_actual_values.append(round(float(row["total_feed_kg"]), 2))
         target_actual_target_values.append(round(rec_kg, 2) if has_recommendation_data else None)
 
-    # ── FIX: "Recommended feed today" KPI ─────────────────────────────────────
+    # ── "Recommended feed today" KPI ──────────────────────────────────────────
     today_feed_given_kg       = float(
         FeedLog.objects.filter(date=today).aggregate(total=Sum("feed_amount_kg"))["total"] or 0
     )
@@ -294,7 +289,6 @@ def dashboard(request):
 
     recommended_feed_today_kg = round(recommended_feed_today_kg, 2)
 
-    # Source label shown in the weather bar pill
     if recommended_feed_sources == {"pond"}:
         label = "Pond weather"
     elif recommended_feed_sources == {"api"}:
@@ -394,7 +388,7 @@ def pond_detail(request, pk):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Batch detail — PUBLIC (read-only)
+# Batch detail — PUBLIC (read-only) — FEATURE 1: Enhanced with growth charts
 # ─────────────────────────────────────────────────────────────────────────────
 
 def batch_detail(request, pk):
@@ -416,6 +410,22 @@ def batch_detail(request, pk):
     mortality_logs  = batch.mortality_logs.all()[:10]
     total_mortality = batch.mortality_logs.aggregate(total=Sum("count"))["total"] or 0
     harvests        = batch.harvests.all()
+
+    # ── Growth chart data (Feature 1) ─────────────────────────────────────────
+    growth_list = list(growth_records.order_by("date"))
+    growth_labels        = [str(r.date) for r in growth_list]
+    growth_weight_values = [float(r.avg_weight_g) for r in growth_list]
+    growth_count_values  = [r.surviving_count for r in growth_list]
+
+    # Growth summary stats
+    first_record    = growth_list[0] if growth_list else None
+    latest_record   = growth_list[-1] if growth_list else None
+    starting_weight = float(first_record.avg_weight_g) if first_record else float(batch.initial_avg_weight_g)
+    current_weight  = float(latest_record.avg_weight_g) if latest_record else float(batch.initial_avg_weight_g)
+    weight_gain_g   = round(current_weight - starting_weight, 2)
+    weight_gain_pct = round((weight_gain_g / starting_weight * 100) if starting_weight > 0 else 0, 1)
+    current_count   = latest_record.surviving_count if latest_record else batch.initial_count
+    survival_rate   = round((current_count / batch.initial_count * 100) if batch.initial_count > 0 else 0, 1)
 
     if request.method == "POST":
         if not request.user.is_authenticated:
@@ -449,6 +459,17 @@ def batch_detail(request, pk):
         "mortality_logs": mortality_logs,
         "total_mortality": total_mortality,
         "harvests": harvests,
+        # Growth chart data
+        "growth_labels": growth_labels,
+        "growth_weight_values": growth_weight_values,
+        "growth_count_values": growth_count_values,
+        # Growth summary stats
+        "starting_weight": starting_weight,
+        "current_weight": current_weight,
+        "weight_gain_g": weight_gain_g,
+        "weight_gain_pct": weight_gain_pct,
+        "survival_rate": survival_rate,
+        "current_count": current_count,
     })
 
 
@@ -518,6 +539,13 @@ def alert_list(request):
 
 
 def profit_loss_report(request):
+    """
+    FEATURE 2: Enhanced profit/loss report with:
+    - Expense doughnut chart by category
+    - 6-month revenue vs cost bar chart
+    - Feed cost vs harvest revenue line chart
+    - Combined transaction table
+    """
     today     = timezone.now().date()
     month_str = request.GET.get("month", today.strftime("%Y-%m"))
     try:
@@ -551,6 +579,18 @@ def profit_loss_report(request):
         .order_by("-total")
     )
 
+    # ── Expense doughnut chart data ───────────────────────────────────────────
+    expense_cat_labels = []
+    expense_cat_values = []
+    # Include feed cost as a category
+    if feed_cost > 0:
+        expense_cat_labels.append("Feed (calculated)")
+        expense_cat_values.append(round(feed_cost, 2))
+    for row in by_category:
+        expense_cat_labels.append(row["category"].replace("_", " ").title())
+        expense_cat_values.append(round(float(row["total"]), 2))
+
+    # ── 6-month trend data ────────────────────────────────────────────────────
     monthly_trend = []
     for i in range(5, -1, -1):
         m_start = (today.replace(day=1) - timedelta(days=i * 30)).replace(day=1)
@@ -560,14 +600,37 @@ def profit_loss_report(request):
             HarvestRecord.objects.filter(harvest_date__gte=m_start, harvest_date__lt=m_end)
         )
         m_exp   = float(Expense.objects.filter(date__gte=m_start, date__lt=m_end).aggregate(t=Sum("amount"))["t"] or 0)
-        m_feed  = float(FeedLog.objects.filter(date__gte=m_start, date__lt=m_end).aggregate(kg=Sum("feed_amount_kg"))["kg"] or 0)
-        m_cost  = round(m_exp + m_feed * feed_cost_per_kg, 2)
+        m_feed_kg = float(FeedLog.objects.filter(date__gte=m_start, date__lt=m_end).aggregate(kg=Sum("feed_amount_kg"))["kg"] or 0)
+        m_feed_cost = round(m_feed_kg * feed_cost_per_kg, 2)
+        m_cost  = round(m_exp + m_feed_cost, 2)
         monthly_trend.append({
-            "label":   m_start.strftime("%b %Y"),
-            "revenue": round(m_rev, 2),
-            "cost":    m_cost,
-            "profit":  round(m_rev - m_cost, 2),
+            "label":     m_start.strftime("%b %Y"),
+            "revenue":   round(m_rev, 2),
+            "cost":      m_cost,
+            "profit":    round(m_rev - m_cost, 2),
+            "feed_cost": m_feed_cost,
+            "other_exp": round(m_exp, 2),
         })
+
+    # ── Combined transaction list for this month ───────────────────────────────
+    transactions = []
+    for h in harvests_qs:
+        transactions.append({
+            "date":        h.harvest_date,
+            "type":        "revenue",
+            "description": f"Harvest — {h.batch}",
+            "amount":      round(h.gross_revenue, 2),
+            "sign":        "+",
+        })
+    for exp in expenses_qs:
+        transactions.append({
+            "date":        exp.date,
+            "type":        "expense",
+            "description": f"{exp.get_category_display()} — {exp.description}",
+            "amount":      float(exp.amount),
+            "sign":        "−",
+        })
+    transactions.sort(key=lambda x: x["date"], reverse=True)
 
     return render(request, "farm/profit_loss.html", {
         "month_str": month_str,
@@ -583,6 +646,108 @@ def profit_loss_report(request):
         "margin_pct": margin_pct,
         "by_category": by_category,
         "monthly_trend": monthly_trend,
+        # Enhanced chart data
+        "expense_cat_labels": expense_cat_labels,
+        "expense_cat_values": expense_cat_values,
+        "transactions": transactions,
+    })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FEATURE 3: Mortality Report — PUBLIC (read-only)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def mortality_report(request):
+    """
+    Dedicated mortality tracking page with:
+    - Monthly summary (total deaths, mortality rate, most common cause)
+    - Doughnut chart — deaths by cause
+    - Line chart — monthly trend (last 6 months)
+    - Full mortality log table with color coding
+    """
+    today = timezone.now().date()
+    month_str = request.GET.get("month", today.strftime("%Y-%m"))
+    try:
+        year, month = int(month_str.split("-")[0]), int(month_str.split("-")[1])
+    except Exception:
+        year, month = today.year, today.month
+
+    start = date(year, month, 1)
+    end   = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+
+    # ── All mortality logs (for full table) ───────────────────────────────────
+    all_logs = (
+        MortalityLog.objects
+        .select_related("batch__pond")
+        .order_by("-date")
+    )
+
+    # ── This month's logs ─────────────────────────────────────────────────────
+    month_logs = all_logs.filter(date__gte=start, date__lt=end)
+    total_deaths_month = month_logs.aggregate(t=Sum("count"))["t"] or 0
+
+    # Total initial count across all batches (for mortality rate)
+    total_initial = FishBatch.objects.aggregate(t=Sum("initial_count"))["t"] or 1
+    mortality_rate_pct = round(total_deaths_month / total_initial * 100, 2) if total_initial else 0
+
+    # Most common cause this month
+    cause_agg = (
+        month_logs.values("cause")
+        .annotate(total=Sum("count"))
+        .order_by("-total")
+    )
+    most_common_cause = cause_agg[0]["cause"] if cause_agg else None
+    most_common_cause_label = dict(MortalityLog.CAUSE_CHOICES).get(most_common_cause, "—") if most_common_cause else "—"
+
+    # ── Deaths by cause (doughnut chart) ──────────────────────────────────────
+    cause_labels = []
+    cause_values = []
+    for row in cause_agg:
+        cause_labels.append(dict(MortalityLog.CAUSE_CHOICES).get(row["cause"], row["cause"]))
+        cause_values.append(row["total"])
+
+    # ── Monthly trend (last 6 months) ─────────────────────────────────────────
+    trend_labels  = []
+    trend_values  = []
+    for i in range(5, -1, -1):
+        m_start = (today.replace(day=1) - timedelta(days=i * 30)).replace(day=1)
+        m_end   = date(m_start.year + 1, 1, 1) if m_start.month == 12 else date(m_start.year, m_start.month + 1, 1)
+        deaths  = MortalityLog.objects.filter(date__gte=m_start, date__lt=m_end).aggregate(t=Sum("count"))["t"] or 0
+        trend_labels.append(m_start.strftime("%b %Y"))
+        trend_values.append(deaths)
+
+    # ── Deaths by pond (for additional breakdown) ─────────────────────────────
+    pond_breakdown = (
+        month_logs.values("batch__pond__name")
+        .annotate(total=Sum("count"))
+        .order_by("-total")
+    )
+
+    # ── All-time totals by cause ──────────────────────────────────────────────
+    all_cause_agg = (
+        all_logs.values("cause")
+        .annotate(total=Sum("count"))
+        .order_by("-total")
+    )
+    total_deaths_all = all_logs.aggregate(t=Sum("count"))["t"] or 0
+
+    return render(request, "farm/mortality_report.html", {
+        "month_str": month_str,
+        "start": start,
+        "end": end,
+        "total_deaths_month": total_deaths_month,
+        "mortality_rate_pct": mortality_rate_pct,
+        "most_common_cause_label": most_common_cause_label,
+        "cause_labels": cause_labels,
+        "cause_values": cause_values,
+        "trend_labels": trend_labels,
+        "trend_values": trend_values,
+        "all_logs": all_logs,
+        "month_logs": month_logs,
+        "pond_breakdown": pond_breakdown,
+        "all_cause_agg": all_cause_agg,
+        "total_deaths_all": total_deaths_all,
+        "cause_choices": MortalityLog.CAUSE_CHOICES,
     })
 
 
@@ -700,6 +865,7 @@ def send_test_alert(request):
         messages.warning(request, "Broker unavailable — sent synchronously.")
     return redirect("farm:dashboard")
 
+
 @require_POST
 @login_required
 def refresh_weather_view(request):
@@ -732,6 +898,7 @@ def refresh_weather_view(request):
     except Exception:
         messages.error(request, "Farm profile not found.")
     return redirect("farm:dashboard")
+
 
 @require_POST
 @login_required

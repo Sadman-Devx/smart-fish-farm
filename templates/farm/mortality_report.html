@@ -1,0 +1,527 @@
+{% extends "base.html" %}
+{% block title %}Mortality Report{% endblock %}
+{% block topbar_title %}Mortality Report{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{% url 'farm:dashboard' %}" class="btn btn-sm">← Dashboard</a>
+  {% if request.user.is_authenticated %}
+    <a href="{% url 'farm:mortality_create' %}" class="btn btn-accent btn-sm">+ Log Mortality</a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="page-header mb-16">
+  <div>
+    <h1>💀 Mortality Report</h1>
+    <p>Fish loss tracking, cause analysis, and monthly trends</p>
+  </div>
+  <form method="get" style="display:flex;align-items:center;gap:8px">
+    <input type="month" name="month" value="{{ month_str }}"
+      style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;
+             color:var(--text);padding:7px 12px;font-family:inherit;font-size:13px">
+    <button type="submit" class="btn btn-sm">Go</button>
+  </form>
+</div>
+
+{# ── Monthly Summary KPIs ─────────────────────────────────────── #}
+<div class="kpi-grid" style="margin-bottom:20px">
+
+  <div class="kpi-card k-orange">
+    <div class="kpi-label">Deaths This Month</div>
+    <div class="kpi-value" style="color:var(--accent3)">
+      {{ total_deaths_month }} <small>fish</small>
+    </div>
+    <div class="kpi-meta">{{ start|date:"F Y" }}</div>
+  </div>
+
+  <div class="kpi-card {% if mortality_rate_pct > 5 %}k-warn{% else %}k-blue{% endif %}">
+    <div class="kpi-label">Mortality Rate</div>
+    <div class="kpi-value"
+      style="color:{% if mortality_rate_pct > 10 %}var(--danger){% elif mortality_rate_pct > 5 %}var(--warn){% else %}var(--success){% endif %}">
+      {{ mortality_rate_pct }}%
+    </div>
+    <div class="kpi-meta">% of total stocked</div>
+  </div>
+
+  <div class="kpi-card k-blue">
+    <div class="kpi-label">Most Common Cause</div>
+    <div class="kpi-value" style="font-size:18px;line-height:1.2">
+      {{ most_common_cause_label }}
+    </div>
+    <div class="kpi-meta">This month</div>
+  </div>
+
+  <div class="kpi-card k-teal">
+    <div class="kpi-label">All-Time Deaths</div>
+    <div class="kpi-value">{{ total_deaths_all }} <small>fish</small></div>
+    <div class="kpi-meta">Across all batches</div>
+  </div>
+
+</div>
+
+{# ── Charts Row ─────────────────────────────────────────────────── #}
+<div class="row-2" style="margin-bottom:16px">
+
+  {# ── Cause Doughnut Chart ── #}
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Deaths by Cause</span>
+      <span class="pill pill-warn">{{ start|date:"F Y" }}</span>
+    </div>
+    <div class="card-body">
+      {% if cause_labels %}
+      <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">
+        <div style="flex:0 0 200px;max-width:200px">
+          <canvas id="causeDoughnut" height="200"></canvas>
+        </div>
+        <div style="flex:1;min-width:160px;display:flex;flex-direction:column;gap:8px;padding-top:8px">
+          {% for row in cause_agg %}
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="cause-dot-{{ forloop.counter }}"
+                style="width:10px;height:10px;border-radius:50%;flex-shrink:0;
+                  background:{% cycle '#ef4444' '#f59e0b' '#00b8ff' '#a855f7' '#10b981' '#ff6b35' %}">
+              </div>
+              <span class="fs-xs">{{ row.cause|title }}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span class="badge badge-secondary">{{ row.total }}</span>
+              {% if total_deaths_month > 0 %}
+              <span class="fs-xs text-muted">
+                ({% widthratio row.total total_deaths_month 100 %}%)
+              </span>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% else %}
+      <div style="text-align:center;padding:40px 0">
+        <div style="font-size:36px;margin-bottom:10px">✅</div>
+        <p class="text-muted fs-sm">No mortality records for {{ start|date:"F Y" }}.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Monthly Trend Line Chart ── #}
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Monthly Mortality Trend</span>
+      <span class="pill pill-info">Last 6 months</span>
+    </div>
+    <div class="card-body">
+      <canvas id="mortalityTrendChart" height="230"></canvas>
+    </div>
+  </div>
+
+</div>
+
+{# ── Pond Breakdown (this month) ────────────────────────────────── #}
+{% if pond_breakdown %}
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header">
+    <span class="card-title">Deaths by Pond — {{ start|date:"F Y" }}</span>
+  </div>
+  <div class="card-body" style="padding:14px 16px">
+    <div style="display:flex;flex-direction:column;gap:10px">
+      {% for row in pond_breakdown %}
+      <div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+          <span class="fs-sm fw-bold">{{ row.batch__pond__name }}</span>
+          <span class="fs-sm" style="color:var(--danger)">{{ row.total }} fish</span>
+        </div>
+        <div class="progress-bar" style="height:6px">
+          <div class="progress-fill"
+            style="width:{% widthratio row.total total_deaths_month 100 %}%;
+                   background:var(--danger);border-radius:3px">
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ── All-Time Cause Summary ─────────────────────────────────────── #}
+{% if all_cause_agg %}
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header">
+    <span class="card-title">All-Time Deaths by Cause</span>
+    <span class="badge badge-danger">{{ total_deaths_all }} total</span>
+  </div>
+  <div class="card-body" style="padding:0">
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Cause</th>
+            <th class="text-end">Deaths</th>
+            <th class="text-end">% of Total</th>
+            <th>Severity</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in all_cause_agg %}
+          <tr>
+            <td>
+              <span style="display:inline-flex;align-items:center;gap:8px">
+                <span style="font-size:16px">
+                  {% if row.cause == "disease"     %}🦠
+                  {% elif row.cause == "oxygen"    %}💧
+                  {% elif row.cause == "temperature"%}🌡
+                  {% elif row.cause == "predator"  %}🦅
+                  {% elif row.cause == "unknown"   %}❓
+                  {% else %}⚠️{% endif %}
+                </span>
+                {{ row.cause|title }}
+              </span>
+            </td>
+            <td class="text-end fw-bold" style="color:var(--danger)">{{ row.total }}</td>
+            <td class="text-end text-muted">
+              {% if total_deaths_all > 0 %}
+                {% widthratio row.total total_deaths_all 100 %}%
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              {% if row.cause == "disease" or row.cause == "oxygen" %}
+                <span class="badge badge-danger">Critical</span>
+              {% elif row.cause == "temperature" or row.cause == "predator" %}
+                <span class="badge badge-warn">Warning</span>
+              {% else %}
+                <span class="badge badge-secondary">Monitor</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ── Full Mortality Log Table ────────────────────────────────────── #}
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Complete Mortality Log</span>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="badge badge-secondary">{{ all_logs.count }} records</span>
+      {% if request.user.is_authenticated %}
+        <a href="{% url 'farm:mortality_create' %}" class="btn btn-sm btn-accent">+ Log Event</a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if all_logs %}
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Batch / Pond</th>
+          <th>Cause</th>
+          <th class="text-end">Fish Lost</th>
+          <th>Severity</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in all_logs %}
+        <tr style="
+          {% if log.cause == 'disease' or log.cause == 'oxygen' %}
+            background:rgba(239,68,68,.03);
+          {% elif log.count > 50 %}
+            background:rgba(245,158,11,.03);
+          {% endif %}">
+
+          <td class="text-muted fs-sm" style="white-space:nowrap">{{ log.date }}</td>
+
+          <td>
+            <div class="fs-sm fw-bold">
+              <a href="{% url 'farm:batch_detail' log.batch.pk %}"
+                 style="color:var(--accent2)">
+                {{ log.batch.get_species_display }}
+              </a>
+            </div>
+            <div class="fs-xs text-muted">{{ log.batch.pond.name }}</div>
+          </td>
+
+          <td>
+            <span style="display:inline-flex;align-items:center;gap:6px">
+              <span>
+                {% if log.cause == "disease"      %}🦠
+                {% elif log.cause == "oxygen"     %}💧
+                {% elif log.cause == "temperature"%}🌡
+                {% elif log.cause == "predator"   %}🦅
+                {% elif log.cause == "unknown"    %}❓
+                {% else %}⚠️{% endif %}
+              </span>
+              <span class="fs-sm">{{ log.get_cause_display }}</span>
+            </span>
+          </td>
+
+          <td class="text-end">
+            <span style="font-family:'Syne',sans-serif;font-size:15px;font-weight:800;
+              color:{% if log.count > 50 %}var(--danger){% elif log.count > 20 %}var(--warn){% else %}var(--text){% endif %}">
+              {{ log.count }}
+            </span>
+          </td>
+
+          <td>
+            {% if log.count > 50 %}
+              <span class="badge badge-danger">🚨 High</span>
+            {% elif log.count > 20 %}
+              <span class="badge badge-warn">⚠ Medium</span>
+            {% else %}
+              <span class="badge badge-secondary">Low</span>
+            {% endif %}
+          </td>
+
+          <td class="fs-xs text-muted" style="max-width:180px">
+            {{ log.notes|truncatechars:60|default:"—" }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% else %}
+  <div class="card-body" style="text-align:center;padding:48px">
+    <div style="font-size:40px;margin-bottom:12px">✅</div>
+    <p class="text-muted fs-sm">No mortality events recorded yet.</p>
+    {% if request.user.is_authenticated %}
+      <a href="{% url 'farm:mortality_create' %}" class="btn btn-accent btn-sm" style="margin-top:14px">
+        Log First Event
+      </a>
+    {% else %}
+      <a href="{% url 'accounts:login' %}" class="btn btn-sm" style="margin-top:14px">Sign In to Log</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{# ── Tips panel ─────────────────────────────────────────────────── #}
+<div class="card" style="margin-top:16px">
+  <div class="card-header"><span class="card-title">🩺 Cause Reference Guide</span></div>
+  <div class="card-body">
+    <div class="row-2" style="gap:10px">
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;gap:10px;align-items:flex-start;padding:10px;background:var(--surface2);border-radius:8px">
+          <span style="font-size:18px;flex-shrink:0">🦠</span>
+          <div>
+            <div class="fs-sm fw-bold">Disease</div>
+            <div class="fs-xs text-muted">Bacterial/fungal infection. Isolate affected batch, treat with approved medication. Log medication as an expense.</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:flex-start;padding:10px;background:var(--surface2);border-radius:8px">
+          <span style="font-size:18px;flex-shrink:0">💧</span>
+          <div>
+            <div class="fs-sm fw-bold">Low Oxygen</div>
+            <div class="fs-xs text-muted">DO below 4 mg/L is critical. Increase aeration immediately. Reduce feed. Log water quality after correction.</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:flex-start;padding:10px;background:var(--surface2);border-radius:8px">
+          <span style="font-size:18px;flex-shrink:0">🌡</span>
+          <div>
+            <div class="fs-sm fw-bold">Temperature Stress</div>
+            <div class="fs-xs text-muted">Above 34°C or below 15°C causes stress. Shade pond, adjust feed rate. Monitor temp daily.</div>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;gap:10px;align-items:flex-start;padding:10px;background:var(--surface2);border-radius:8px">
+          <span style="font-size:18px;flex-shrink:0">🦅</span>
+          <div>
+            <div class="fs-sm fw-bold">Predator</div>
+            <div class="fs-xs text-muted">Birds, snakes, or other animals. Install nets over the pond. Check pond perimeter fencing.</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:flex-start;padding:10px;background:var(--surface2);border-radius:8px">
+          <span style="font-size:18px;flex-shrink:0">❓</span>
+          <div>
+            <div class="fs-sm fw-bold">Unknown</div>
+            <div class="fs-xs text-muted">Investigate water quality, check for disease signs. Collect sample for lab testing if deaths exceed 50.</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:flex-start;padding:10px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:8px">
+          <span style="font-size:18px;flex-shrink:0">🚨</span>
+          <div>
+            <div class="fs-sm fw-bold" style="color:var(--danger)">Alert Threshold</div>
+            <div class="fs-xs text-muted">Logging &gt;50 deaths in a single event triggers an automatic critical alert on the dashboard.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── JSON data for charts ── #}
+{{ cause_labels|json_script:"cause-labels" }}
+{{ cause_values|json_script:"cause-values" }}
+{{ trend_labels|json_script:"trend-labels" }}
+{{ trend_values|json_script:"trend-values" }}
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+Chart.defaults.color       = '#7a95b8';
+Chart.defaults.borderColor = '#1f3356';
+Chart.defaults.font.family = "'Space Grotesk', system-ui, sans-serif";
+
+function safeJson(id) {
+  try { return JSON.parse(document.getElementById(id).textContent); } catch(e) { return []; }
+}
+
+var causeLabels  = safeJson('cause-labels');
+var causeValues  = safeJson('cause-values');
+var trendLabels  = safeJson('trend-labels');
+var trendValues  = safeJson('trend-values');
+
+// ── 1. Cause doughnut ─────────────────────────────────────────────────────
+(function(){
+  var ctx = document.getElementById('causeDoughnut');
+  if (!ctx || !causeLabels.length) return;
+
+  var palette = [
+    '#ef4444',  // disease   — red
+    '#f59e0b',  // oxygen    — amber
+    '#00b8ff',  // temp      — blue
+    '#a855f7',  // predator  — purple
+    '#10b981',  // unknown   — green
+    '#ff6b35',  // other     — orange
+  ];
+
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: causeLabels,
+      datasets: [{
+        data: causeValues,
+        backgroundColor: palette.slice(0, causeValues.length),
+        borderColor: '#111e35',
+        borderWidth: 3,
+        hoverOffset: 8,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '60%',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#111e35',
+          borderColor: '#1f3356',
+          borderWidth: 1,
+          titleColor: '#e8f4ff',
+          bodyColor: '#7a95b8',
+          callbacks: {
+            label: function(ctx) {
+              var total = ctx.dataset.data.reduce(function(a,b){ return a+b; }, 0);
+              var pct   = total > 0 ? Math.round(ctx.parsed / total * 100) : 0;
+              return ' ' + ctx.parsed + ' fish (' + pct + '%)';
+            }
+          }
+        }
+      }
+    }
+  });
+})();
+
+// ── 2. Monthly trend line ─────────────────────────────────────────────────
+(function(){
+  var ctx = document.getElementById('mortalityTrendChart');
+  if (!ctx) return;
+
+  var maxVal = Math.max.apply(null, trendValues.concat([1]));
+
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: trendLabels,
+      datasets: [{
+        label: 'Fish Deaths',
+        data: trendValues,
+        borderColor: '#ef4444',
+        backgroundColor: 'rgba(239,68,68,.10)',
+        tension: 0.35,
+        fill: true,
+        pointRadius: 5,
+        pointHoverRadius: 8,
+        pointBackgroundColor: trendValues.map(function(v){
+          return v > 50 ? '#ef4444' : v > 20 ? '#f59e0b' : '#10b981';
+        }),
+        pointBorderColor: '#111e35',
+        pointBorderWidth: 2,
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#111e35',
+          borderColor: '#1f3356',
+          borderWidth: 1,
+          titleColor: '#e8f4ff',
+          bodyColor: '#7a95b8',
+          callbacks: {
+            label: function(ctx) {
+              var v = ctx.parsed.y;
+              var status = v > 50 ? ' 🚨 High' : v > 20 ? ' ⚠ Medium' : ' ✓ Low';
+              return ' ' + v + ' fish' + status;
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          min: 0,
+          grid: { color: '#1f3356' },
+          ticks: { precision: 0 },
+          // Draw threshold reference line via plugin
+        },
+        x: { grid: { color: '#1f3356' } }
+      },
+      // Inline plugin: draw a dashed "alert threshold" line at y=50
+      plugins: [
+        {
+          id: 'thresholdLine',
+          afterDraw: function(chart) {
+            if (maxVal < 10) return; // skip if all values are tiny
+            var ctx2 = chart.ctx;
+            var yAxis = chart.scales.y;
+            var xAxis = chart.scales.x;
+            var y50 = yAxis.getPixelForValue(50);
+            if (y50 < yAxis.top || y50 > yAxis.bottom) return;
+            ctx2.save();
+            ctx2.setLineDash([6, 4]);
+            ctx2.strokeStyle = 'rgba(239,68,68,.40)';
+            ctx2.lineWidth = 1.5;
+            ctx2.beginPath();
+            ctx2.moveTo(xAxis.left, y50);
+            ctx2.lineTo(xAxis.right, y50);
+            ctx2.stroke();
+            ctx2.restore();
+            // Label
+            ctx2.save();
+            ctx2.fillStyle = 'rgba(239,68,68,.70)';
+            ctx2.font = '10px Space Grotesk';
+            ctx2.fillText('Alert threshold (50)', xAxis.left + 6, y50 - 4);
+            ctx2.restore();
+          }
+        }
+      ]
+    }
+  });
+})();
+</script>
+{% endblock %}

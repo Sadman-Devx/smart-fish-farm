@@ -71,6 +71,115 @@
   {% endif %}
 </div>
 
+{# ══════════════════════════════════════════════════════════════════════════════
+   FEATURE 1 — Growth Summary Card + Chart
+   ══════════════════════════════════════════════════════════════════════════════ #}
+
+{% if growth_labels %}
+<div class="row-2">
+
+  {# ── Growth Summary Card ── #}
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">📈 Growth Summary</span>
+      <span class="pill pill-success">{{ growth_labels|length }} records</span>
+    </div>
+    <div class="card-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+
+        <div style="background:var(--surface2);border-radius:8px;padding:12px 14px">
+          <div class="fs-xs text-muted" style="margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">Starting Weight</div>
+          <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--muted)">
+            {{ starting_weight|floatformat:1 }} <span style="font-size:13px">g</span>
+          </div>
+          <div class="fs-xs text-muted">At first record</div>
+        </div>
+
+        <div style="background:var(--surface2);border-radius:8px;padding:12px 14px;border:1px solid rgba(0,229,180,.2)">
+          <div class="fs-xs text-muted" style="margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">Current Weight</div>
+          <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--accent)">
+            {{ current_weight|floatformat:1 }} <span style="font-size:13px">g</span>
+          </div>
+          <div class="fs-xs" style="color:{% if weight_gain_g >= 0 %}var(--success){% else %}var(--danger){% endif %}">
+            {% if weight_gain_g >= 0 %}↑{% else %}↓{% endif %} {{ weight_gain_g|floatformat:1 }}g ({{ weight_gain_pct }}%)
+          </div>
+        </div>
+
+        <div style="background:var(--surface2);border-radius:8px;padding:12px 14px">
+          <div class="fs-xs text-muted" style="margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">Fish Count</div>
+          <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--accent2)">
+            {{ current_count }}
+          </div>
+          <div class="fs-xs text-muted">of {{ batch.initial_count }} stocked</div>
+        </div>
+
+        <div style="background:var(--surface2);border-radius:8px;padding:12px 14px;
+          border:1px solid {% if survival_rate >= 90 %}rgba(16,185,129,.25){% elif survival_rate >= 75 %}rgba(245,158,11,.25){% else %}rgba(239,68,68,.25){% endif %}">
+          <div class="fs-xs text-muted" style="margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">Survival Rate</div>
+          <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;
+            color:{% if survival_rate >= 90 %}var(--success){% elif survival_rate >= 75 %}var(--warn){% else %}var(--danger){% endif %}">
+            {{ survival_rate }}%
+          </div>
+          <div class="progress-bar" style="margin-top:8px">
+            <div class="progress-fill" style="width:{{ survival_rate }}%;
+              background:{% if survival_rate >= 90 %}var(--success){% elif survival_rate >= 75 %}var(--warn){% else %}var(--danger){% endif %}">
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {# Weight-to-market progress #}
+      {% if ai_prediction %}
+      <div style="background:var(--surface2);border-radius:8px;padding:12px 14px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span class="fs-xs text-muted">Weight progress to market ({{ ai_prediction.target_market_weight_g|floatformat:0 }}g)</span>
+          <span class="fs-xs fw-bold" style="color:var(--accent)">
+            {{ current_weight|floatformat:0 }}g / {{ ai_prediction.target_market_weight_g|floatformat:0 }}g
+          </span>
+        </div>
+        <div class="progress-bar" style="height:8px">
+          {% with pct=current_weight|floatformat:0 %}
+          <div class="progress-fill" style="
+            width:{% widthratio current_weight ai_prediction.target_market_weight_g 100 %}%;
+            background:linear-gradient(90deg,var(--accent2),var(--accent));
+            border-radius:4px">
+          </div>
+          {% endwith %}
+        </div>
+        <div class="fs-xs text-muted" style="margin-top:6px">
+          Est. harvest: {{ ai_prediction.estimated_harvest_date }} ({{ ai_prediction.estimated_days_to_market }} days)
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Growth Trend Chart ── #}
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">📊 Growth Trend</span>
+      <span class="pill pill-info">Weight &amp; Count</span>
+    </div>
+    <div class="card-body">
+      <canvas id="growthChart" height="220"></canvas>
+    </div>
+  </div>
+
+</div>
+{% else %}
+{# No growth records — show placeholder #}
+<div class="card">
+  <div class="card-body" style="text-align:center;padding:32px">
+    <div style="font-size:36px;margin-bottom:10px">📈</div>
+    <p class="text-muted fs-sm" style="margin-bottom:14px">No growth records yet. Add weekly samples to track progress and see charts.</p>
+    {% if request.user.is_authenticated %}
+      <a href="{% url 'farm:growth_create' %}" class="btn btn-accent btn-sm">+ Add First Growth Record</a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
 {# ── Feed form (auth only) + AI prediction ─────────────── #}
 <div class="row-2">
 
@@ -95,7 +204,6 @@
           <button type="submit" class="btn btn-accent" style="margin-top:4px">Save Feeding Log</button>
         </form>
       {% else %}
-        {# Guest placeholder — shows the suggested amount but no form #}
         {% if auto_feed_kg %}
         <div style="padding:14px;background:var(--surface2);border-radius:8px;margin-bottom:14px">
           <div class="fs-xs text-muted" style="margin-bottom:4px">Suggested feed amount</div>
@@ -172,7 +280,7 @@
 
 </div>
 
-{# ── Growth records + Feed history ─────────────────────── #}
+{# ── Growth records table + Feed history ─────────────────── #}
 <div class="row-2">
   <div class="card">
     <div class="card-header">
@@ -185,7 +293,12 @@
     <div class="table-responsive">
       <table class="table">
         <thead>
-          <tr><th>Date</th><th class="text-end">Count</th><th class="text-end">Avg Weight (g)</th></tr>
+          <tr>
+            <th>Date</th>
+            <th class="text-end">Count</th>
+            <th class="text-end">Avg Weight (g)</th>
+            <th class="text-end">Biomass (kg)</th>
+          </tr>
         </thead>
         <tbody>
           {% for gr in growth_records %}
@@ -193,6 +306,10 @@
             <td class="text-muted fs-sm">{{ gr.date }}</td>
             <td class="text-end">{{ gr.surviving_count }}</td>
             <td class="text-end fw-bold" style="color:var(--accent)">{{ gr.avg_weight_g }}</td>
+            <td class="text-end text-muted fs-sm">
+              {{ gr.surviving_count|floatformat:0 }}×{{ gr.avg_weight_g|floatformat:1 }}g
+              ≈ {% widthratio gr.avg_weight_g 1000 gr.surviving_count %}&nbsp;kg
+            </td>
           </tr>
           {% endfor %}
         </tbody>
@@ -233,4 +350,95 @@
     {% endif %}
   </div>
 </div>
+
+{# ── JSON data for Chart.js ── #}
+{{ growth_labels|json_script:"growth-labels" }}
+{{ growth_weight_values|json_script:"growth-weight-values" }}
+{{ growth_count_values|json_script:"growth-count-values" }}
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+Chart.defaults.color       = '#7a95b8';
+Chart.defaults.borderColor = '#1f3356';
+Chart.defaults.font.family = "'Space Grotesk', system-ui, sans-serif";
+
+function safeJson(id) {
+  try { return JSON.parse(document.getElementById(id).textContent); }
+  catch(e) { return []; }
+}
+
+var growthLabels  = safeJson('growth-labels');
+var growthWeights = safeJson('growth-weight-values');
+var growthCounts  = safeJson('growth-count-values');
+
+(function () {
+  var ctx = document.getElementById('growthChart');
+  if (!ctx || !growthLabels.length) return;
+  new Chart(ctx, {
+    data: {
+      labels: growthLabels,
+      datasets: [
+        {
+          type: 'line',
+          label: 'Avg Weight (g)',
+          data: growthWeights,
+          borderColor: '#00e5b4',
+          backgroundColor: 'rgba(0,229,180,.10)',
+          tension: 0.35,
+          fill: true,
+          pointRadius: 4,
+          pointHoverRadius: 7,
+          yAxisID: 'yWeight',
+        },
+        {
+          type: 'bar',
+          label: 'Surviving Count',
+          data: growthCounts,
+          backgroundColor: 'rgba(0,184,255,.25)',
+          borderColor: '#00b8ff',
+          borderWidth: 1,
+          borderRadius: 4,
+          yAxisID: 'yCount',
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          labels: { color: '#7a95b8', font: { size: 11 }, padding: 16 }
+        },
+        tooltip: {
+          backgroundColor: '#111e35',
+          borderColor: '#1f3356',
+          borderWidth: 1,
+          titleColor: '#e8f4ff',
+          bodyColor: '#7a95b8',
+        }
+      },
+      scales: {
+        yWeight: {
+          type: 'linear',
+          position: 'left',
+          title: { display: true, text: 'Avg Weight (g)', color: '#00e5b4', font: { size: 11 } },
+          grid: { color: '#1f3356' },
+          ticks: { color: '#00e5b4' }
+        },
+        yCount: {
+          type: 'linear',
+          position: 'right',
+          title: { display: true, text: 'Fish Count', color: '#00b8ff', font: { size: 11 } },
+          grid: { drawOnChartArea: false },
+          ticks: { color: '#00b8ff' }
+        },
+        x: { grid: { color: '#1f3356' } }
+      }
+    }
+  });
+})();
+</script>
 {% endblock %}

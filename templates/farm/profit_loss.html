@@ -16,7 +16,8 @@
   </div>
   <form method="get" style="display:flex;align-items:center;gap:8px">
     <input type="month" name="month" value="{{ month_str }}"
-      style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 12px;font-family:inherit;font-size:13px">
+      style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;
+             color:var(--text);padding:7px 12px;font-family:inherit;font-size:13px">
     <button type="submit" class="btn btn-sm">Go</button>
   </form>
 </div>
@@ -31,7 +32,7 @@
   <div class="kpi-card k-orange">
     <div class="kpi-label">Feed Cost</div>
     <div class="kpi-value">৳ {{ feed_cost|floatformat:0 }}</div>
-    <div class="kpi-meta">{{ feed_kg|floatformat:1 }} kg × BDT/kg rate</div>
+    <div class="kpi-meta">{{ feed_kg|floatformat:1 }} kg consumed</div>
   </div>
   <div class="kpi-card k-warn">
     <div class="kpi-label">Other Expenses</div>
@@ -41,43 +42,139 @@
   <div class="kpi-card k-blue">
     <div class="kpi-label">Total Cost</div>
     <div class="kpi-value">৳ {{ total_cost|floatformat:0 }}</div>
-    <div class="kpi-meta">Feed + expenses</div>
+    <div class="kpi-meta">Feed + all expenses</div>
   </div>
   <div class="kpi-card {% if net_profit >= 0 %}k-success{% else %}k-orange{% endif %}">
-    <div class="kpi-label">Net Profit</div>
+    <div class="kpi-label">Net Profit / Loss</div>
     <div class="kpi-value" style="color:{% if net_profit >= 0 %}var(--success){% else %}var(--danger){% endif %}">
-      ৳ {{ net_profit|floatformat:0 }}
+      {% if net_profit < 0 %}−৳ {{ net_profit|floatformat:0|slice:"1:" }}{% else %}৳ {{ net_profit|floatformat:0 }}{% endif %}
     </div>
-    <div class="kpi-meta">Margin: {{ margin_pct }}%</div>
+    <div class="kpi-meta">
+      Margin: <span style="color:{% if margin_pct >= 0 %}var(--success){% else %}var(--danger){% endif %}">{{ margin_pct }}%</span>
+    </div>
   </div>
 </div>
 
-{# ── Charts + breakdown ──────────────────────────────────────── #}
-<div style="display:grid;grid-template-columns:1fr 300px;gap:16px;margin-bottom:20px">
+
+{# Row 1: 6-month trend + Expense doughnut — fixed heights so neither panel stretches #}
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;align-items:start">
+
+  {# ── 6-Month Revenue vs Cost Chart ── #}
   <div class="card">
-    <div class="card-header"><span class="card-title">6-Month Revenue vs Cost vs Profit</span></div>
-    <div class="card-body"><canvas id="plTrendChart" height="220"></canvas></div>
-  </div>
-  <div class="card">
-    <div class="card-header"><span class="card-title">Cost Breakdown</span></div>
-    <div class="card-body" style="padding:12px 16px">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
-        <span class="fs-sm">🪣 Feed</span>
-        <span class="fs-sm fw-bold" style="color:var(--accent2)">৳ {{ feed_cost|floatformat:0 }}</span>
-      </div>
-      {% for row in by_category %}
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
-        <span class="fs-sm">{{ row.category|title }}</span>
-        <span class="fs-sm fw-bold" style="color:var(--accent3)">৳ {{ row.total|floatformat:0 }}</span>
-      </div>
-      {% endfor %}
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;margin-top:4px">
-        <span class="fs-sm fw-bold">Total Cost</span>
-        <span class="fw-bold" style="color:var(--warn);font-size:15px">৳ {{ total_cost|floatformat:0 }}</span>
+    <div class="card-header">
+      <span class="card-title">Revenue vs Cost — 6 Months</span>
+      <span class="pill pill-info">Monthly trend</span>
+    </div>
+    <div class="card-body" style="padding-bottom:16px">
+      <div style="position:relative;height:260px">
+        <canvas id="plTrendChart"></canvas>
       </div>
     </div>
   </div>
+
+  {# ── Expense Doughnut ── #}
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Cost Breakdown</span>
+      <span class="pill pill-warn">This month</span>
+    </div>
+    <div class="card-body" style="padding-bottom:16px">
+      {% if expense_cat_labels %}
+        {# Fixed-height wrapper so chart doesn't collapse #}
+        <div style="position:relative;height:200px;margin-bottom:14px">
+          <canvas id="expenseDoughnut"></canvas>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:7px">
+          {% if feed_cost > 0 %}
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="width:10px;height:10px;border-radius:2px;background:var(--accent);flex-shrink:0"></div>
+              <span class="fs-xs">Feed (calculated)</span>
+            </div>
+            <span class="fs-xs fw-bold" style="color:var(--accent)">৳ {{ feed_cost|floatformat:0 }}</span>
+          </div>
+          {% endif %}
+          {% for row in by_category %}
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="width:10px;height:10px;border-radius:2px;background:var(--accent2);flex-shrink:0"></div>
+              <span class="fs-xs">{{ row.category|title }}</span>
+            </div>
+            <span class="fs-xs fw-bold" style="color:var(--accent3)">৳ {{ row.total|floatformat:0 }}</span>
+          </div>
+          {% endfor %}
+          <div style="padding-top:8px;border-top:1px solid var(--border);display:flex;justify-content:space-between;margin-top:2px">
+            <span class="fs-xs fw-bold">Total Cost</span>
+            <span class="fs-xs fw-bold" style="color:var(--warn)">৳ {{ total_cost|floatformat:0 }}</span>
+          </div>
+        </div>
+      {% else %}
+        <div style="text-align:center;padding:48px 0;color:var(--muted)">
+          <div style="font-size:36px;margin-bottom:10px">💰</div>
+          <p class="fs-sm">No expenses this month</p>
+          <a href="{% url 'farm:expense_create' %}" class="btn btn-sm btn-accent" style="margin-top:12px">+ Add Expense</a>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
 </div>
+
+{# Row 2: Feed cost vs Harvest revenue line chart #}
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header">
+    <span class="card-title">Feed Cost vs Harvest Revenue — 6 Months</span>
+    <span class="pill pill-accent">Profitability trend</span>
+  </div>
+  <div class="card-body">
+    <div style="position:relative;height:180px">
+      <canvas id="feedRevenueChart"></canvas>
+    </div>
+  </div>
+</div>
+
+{# ── Combined Transaction Table ─────────────────────────────── #}
+{% if transactions %}
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header">
+    <span class="card-title">All Transactions — {{ start|date:"F Y" }}</span>
+    <span class="pill {% if net_profit >= 0 %}pill-success{% else %}pill-danger{% endif %}">
+      Net: ৳ {{ net_profit|floatformat:0 }}
+    </span>
+  </div>
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th class="text-end">Amount (৳)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for tx in transactions %}
+        <tr>
+          <td class="text-muted fs-sm" style="white-space:nowrap">{{ tx.date }}</td>
+          <td>
+            {% if tx.type == "revenue" %}
+              <span class="badge badge-success">↑ Revenue</span>
+            {% else %}
+              <span class="badge badge-warn">↓ Expense</span>
+            {% endif %}
+          </td>
+          <td class="fs-sm">{{ tx.description }}</td>
+          <td class="text-end fw-bold"
+            style="color:{% if tx.type == 'revenue' %}var(--success){% else %}var(--accent3){% endif %}">
+            {{ tx.sign }} {{ tx.amount|floatformat:2 }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
 
 {# ── Harvests this month ──────────────────────────────────────── #}
 {% if harvests %}
@@ -85,7 +182,14 @@
   <div class="card-header"><span class="card-title">Harvests This Month</span></div>
   <div class="table-responsive">
     <table class="table">
-      <thead><tr><th>Date</th><th>Batch</th><th class="text-end">kg</th><th class="text-end">Price/kg</th><th class="text-end">Revenue (৳)</th></tr></thead>
+      <thead>
+        <tr>
+          <th>Date</th><th>Batch</th>
+          <th class="text-end">kg</th>
+          <th class="text-end">Price/kg</th>
+          <th class="text-end">Revenue (৳)</th>
+        </tr>
+      </thead>
       <tbody>
         {% for h in harvests %}
         <tr>
@@ -108,7 +212,13 @@
   <div class="card-header"><span class="card-title">Expenses This Month</span></div>
   <div class="table-responsive">
     <table class="table">
-      <thead><tr><th>Date</th><th>Category</th><th>Description</th><th class="text-end">Amount (৳)</th></tr></thead>
+      <thead>
+        <tr>
+          <th>Date</th><th>Category</th>
+          <th>Description</th>
+          <th class="text-end">Amount (৳)</th>
+        </tr>
+      </thead>
       <tbody>
         {% for exp in expenses %}
         <tr>
@@ -124,25 +234,219 @@
 </div>
 {% endif %}
 
+{# ── JSON data blobs ── #}
 {{ monthly_trend|json_script:"monthly-trend" }}
+{{ expense_cat_labels|json_script:"expense-cat-labels" }}
+{{ expense_cat_values|json_script:"expense-cat-values" }}
+
 {% endblock %}
 
 {% block extra_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-Chart.defaults.color='#7a95b8';Chart.defaults.borderColor='#1f3356';
-Chart.defaults.font.family="'Space Grotesk',system-ui,sans-serif";
-var trend=JSON.parse(document.getElementById('monthly-trend').textContent);
-var labels=trend.map(function(r){return r.label;});
-new Chart(document.getElementById('plTrendChart'),{type:'bar',
-  data:{labels:labels,datasets:[
-    {label:'Revenue',data:trend.map(function(r){return r.revenue;}),backgroundColor:'rgba(16,185,129,.6)',borderRadius:4},
-    {label:'Cost',data:trend.map(function(r){return r.cost;}),backgroundColor:'rgba(255,107,53,.5)',borderRadius:4},
-    {label:'Profit',data:trend.map(function(r){return r.profit;}),type:'line',borderColor:'#00e5b4',tension:0.35,pointRadius:4,yAxisID:'y'}
-  ]},
-  options:{responsive:true,maintainAspectRatio:false,
-    plugins:{legend:{labels:{color:'#7a95b8',font:{size:11}}}},
-    scales:{y:{grid:{color:'#1f3356'}},x:{grid:{display:false}}}}
-});
+Chart.defaults.color       = '#7a95b8';
+Chart.defaults.borderColor = '#1f3356';
+Chart.defaults.font.family = "'Space Grotesk', system-ui, sans-serif";
+
+function safeJson(id) {
+  try { return JSON.parse(document.getElementById(id).textContent); } catch(e) { return []; }
+}
+
+var trend          = safeJson('monthly-trend');
+var expCatLabels   = safeJson('expense-cat-labels');
+var expCatValues   = safeJson('expense-cat-values');
+var trendLabels    = trend.map(function(r){ return r.label; });
+
+// ── 1. 6-Month Revenue vs Cost bar + profit line ───────────────────────────
+(function(){
+  var ctx = document.getElementById('plTrendChart');
+  if (!ctx) return;
+  new Chart(ctx, {
+    data: {
+      labels: trendLabels,
+      datasets: [
+        {
+          type: 'bar',
+          label: 'Revenue (৳)',
+          data: trend.map(function(r){ return r.revenue; }),
+          backgroundColor: 'rgba(16,185,129,.55)',
+          borderColor: '#10b981',
+          borderWidth: 1,
+          borderRadius: 5,
+        },
+        {
+          type: 'bar',
+          label: 'Total Cost (৳)',
+          data: trend.map(function(r){ return r.cost; }),
+          backgroundColor: 'rgba(255,107,53,.45)',
+          borderColor: '#ff6b35',
+          borderWidth: 1,
+          borderRadius: 5,
+        },
+        {
+          type: 'line',
+          label: 'Net Profit (৳)',
+          data: trend.map(function(r){ return r.profit; }),
+          borderColor: '#00e5b4',
+          backgroundColor: 'rgba(0,229,180,.08)',
+          tension: 0.35,
+          pointRadius: 5,
+          pointHoverRadius: 8,
+          fill: false,
+          borderWidth: 2,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#7a95b8', font: { size: 11 }, padding: 14 } },
+        tooltip: {
+          backgroundColor: '#111e35',
+          borderColor: '#1f3356',
+          borderWidth: 1,
+          titleColor: '#e8f4ff',
+          bodyColor: '#7a95b8',
+          callbacks: {
+            label: function(ctx) {
+              return ' ' + ctx.dataset.label + ': ৳' + Number(ctx.parsed.y).toLocaleString();
+            }
+          }
+        }
+      },
+      scales: {
+        y: { grid: { color: '#1f3356' }, ticks: { callback: function(v){ return '৳'+Number(v).toLocaleString(); } } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+})();
+
+// ── 2. Expense doughnut ───────────────────────────────────────────────────
+(function(){
+  var ctx = document.getElementById('expenseDoughnut');
+  if (!ctx || !expCatLabels.length) return;
+  var palette = [
+    '#00e5b4','#00b8ff','#ff6b35','#a855f7',
+    '#f59e0b','#10b981','#ef4444','#06b6d4'
+  ];
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: expCatLabels,
+      datasets: [{
+        data: expCatValues,
+        backgroundColor: palette.slice(0, expCatValues.length),
+        borderColor: '#111e35',
+        borderWidth: 2,
+        hoverOffset: 6,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '62%',
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            color: '#7a95b8',
+            font: { size: 10 },
+            padding: 10,
+            boxWidth: 10,
+          }
+        },
+        tooltip: {
+          backgroundColor: '#111e35',
+          borderColor: '#1f3356',
+          borderWidth: 1,
+          titleColor: '#e8f4ff',
+          bodyColor: '#7a95b8',
+          callbacks: {
+            label: function(ctx) {
+              var total = ctx.dataset.data.reduce(function(a,b){ return a+b; }, 0);
+              var pct   = total > 0 ? Math.round(ctx.parsed / total * 100) : 0;
+              return ' ৳' + Number(ctx.parsed).toLocaleString() + ' (' + pct + '%)';
+            }
+          }
+        }
+      }
+    }
+  });
+})();
+
+// ── 3. Feed cost vs Harvest revenue line chart ────────────────────────────
+(function(){
+  var ctx = document.getElementById('feedRevenueChart');
+  if (!ctx) return;
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: trendLabels,
+      datasets: [
+        {
+          label: 'Harvest Revenue (৳)',
+          data: trend.map(function(r){ return r.revenue; }),
+          borderColor: '#10b981',
+          backgroundColor: 'rgba(16,185,129,.08)',
+          tension: 0.35,
+          fill: true,
+          pointRadius: 4,
+          pointHoverRadius: 7,
+        },
+        {
+          label: 'Feed Cost (৳)',
+          data: trend.map(function(r){ return r.feed_cost; }),
+          borderColor: '#f59e0b',
+          backgroundColor: 'rgba(245,158,11,.06)',
+          tension: 0.35,
+          fill: true,
+          pointRadius: 4,
+          pointHoverRadius: 7,
+          borderDash: [5, 3],
+        },
+        {
+          label: 'Other Expenses (৳)',
+          data: trend.map(function(r){ return r.other_exp; }),
+          borderColor: '#ff6b35',
+          backgroundColor: 'transparent',
+          tension: 0.35,
+          pointRadius: 3,
+          pointHoverRadius: 6,
+          borderDash: [3, 3],
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#7a95b8', font: { size: 11 }, padding: 14 } },
+        tooltip: {
+          backgroundColor: '#111e35',
+          borderColor: '#1f3356',
+          borderWidth: 1,
+          titleColor: '#e8f4ff',
+          bodyColor: '#7a95b8',
+          callbacks: {
+            label: function(ctx) {
+              return ' ' + ctx.dataset.label + ': ৳' + Number(ctx.parsed.y).toLocaleString();
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          grid: { color: '#1f3356' },
+          ticks: { callback: function(v){ return '৳'+Number(v).toLocaleString(); } }
+        },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+})();
 </script>
 {% endblock %}

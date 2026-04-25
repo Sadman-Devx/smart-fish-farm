@@ -48,7 +48,8 @@ urlpatterns = [
     # ── Reports ────────────────────────────────────────────────────────────────
     path("reminders/",                views.reminder_list,     name="reminder_list"),
     path("reports/daily-feed/",       views.daily_feed_report, name="daily_feed_report"),
-    path("reports/profit-loss/",      views.profit_loss_report,name="profit_loss_report"),
-    path("weather/refresh/", views.refresh_weather_view, name="refresh_weather"),
-    path("feeding/done/",    views.mark_feeding_done_view, name="mark_feeding_done"),
+    path("reports/profit-loss/",      views.profit_loss_report, name="profit_loss_report"),
+    path("reports/mortality/",        views.mortality_report,  name="mortality_report"),
+    path("weather/refresh/",          views.refresh_weather_view, name="refresh_weather"),
+    path("feeding/done/",             views.mark_feeding_done_view, name="mark_feeding_done"),
 ]
