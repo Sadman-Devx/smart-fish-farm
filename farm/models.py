@@ -68,6 +68,11 @@ class GrowthRecord(models.Model):
 
 # ── WeatherRecord ─────────────────────────────────────────────────────────────
 class WeatherRecord(models.Model):
+    SOURCE_CHOICES = [
+        ("manual", "Manual Entry"),
+        ("auto",   "Auto (Air Temp Estimate)"),
+        ("sensor", "IoT Sensor"),
+    ]
     pond = models.ForeignKey(Pond, on_delete=models.CASCADE, related_name="weather_records")
     timestamp = models.DateTimeField(default=timezone.now)
     water_temp_c = models.DecimalField(max_digits=4, decimal_places=1,
@@ -77,6 +82,11 @@ class WeatherRecord(models.Model):
     ph = models.DecimalField(max_digits=4, decimal_places=2, help_text="Water pH")
     rainfall_mm = models.DecimalField(max_digits=6, decimal_places=2, default=0,
                                       help_text="Rainfall (mm)")
+    source = models.CharField(          # ← নতুন field
+        max_length=10,
+        choices=SOURCE_CHOICES,
+        default="manual",
+    )
 
     class Meta:
         ordering = ["-timestamp"]

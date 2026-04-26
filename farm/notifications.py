@@ -39,3 +39,25 @@ def send_sms_notification(message: str) -> bool:
     )
     return True
 
+def send_whatsapp_notification(message: str) -> bool:
+    """Send WhatsApp message via Twilio Sandbox."""
+    sid     = getattr(settings, "TWILIO_ACCOUNT_SID", "")
+    token   = getattr(settings, "TWILIO_AUTH_TOKEN", "")
+    from_no = getattr(settings, "TWILIO_FROM_NUMBER", "")
+    to_no   = getattr(settings, "TWILIO_TO_NUMBER", "")
+
+    if not (sid and token and from_no and to_no and Client is not None):
+        return False
+
+    try:
+        client = Client(sid, token)
+        client.messages.create(
+            body=message[:1600],  # WhatsApp max length
+            from_=from_no,
+            to=to_no,
+        )
+        print(f"[WhatsApp] Message sent to {to_no}")
+        return True
+    except Exception as e:
+        print(f"[WhatsApp] Failed: {e}")
+        return False

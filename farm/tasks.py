@@ -5,7 +5,7 @@ from django.utils import timezone
 from celery import shared_task
 
 from .models import DailyWeather, FishBatch
-from .notifications import send_email_notification, send_sms_notification
+from .notifications import send_email_notification, send_sms_notification, send_whatsapp_notification
 from .services import smart_feed_kg_for_batch
 from .services.weather_ingest import get_feeding_suggestion
 
@@ -75,3 +75,87 @@ def send_daily_feed_alert():
     body = "\n".join(lines)
     send_email_notification("🐟 AquaSmart Daily Feed Alert", body)
     send_sms_notification(body)
+    send_whatsapp_notification(body)
+
+@shared_task
+def auto_log_water_temperature():
+    """
+    প্রতিদিন সকাল ৭টায় automatically সব pond এর জন্য
+    air temperature থেকে estimated water temperature log করে।
+    """
+    from .models import Pond, WeatherRecord, DailyWeather, FarmProfile
+    from .services.weather_ingest import get_weather_for_location, get_weather_by_city
+
+    today = timezone.now().date()
+
+    # আজকে already entry আছে কিনা check করো
+    already_logged = WeatherRecord.objects.filter(
+        timestamp__date=today,
+        source="auto"  # auto entry mark করা
+    ).exists()
+
+    if already_logged:
+        return "Already logged today"
+
+    # Farm location থেকে air temperature নাও
+    air_temp = None
+
+    try:
+        fp = FarmProfile.objects.filter(onboarding_complete=True).first()
+        if fp:
+            if fp.latitude and fp.longitude:
+                data = get_weather_for_location(
+                    float(fp.latitude), float(fp.longitude)
+                )
+            elif fp.district:
+                query = f"{fp.upazila},{fp.district},BD" if fp.upazila else f"{fp.district},BD"
+                data = get_weather_by_city(query)
+            else:
+                data = None
+
+            if data:
+                air_temp = data["temp_c"]
+                rainfall  = data["rain_mm"]
+            else:
+                # DailyWeather থেকে নাও
+                dw = DailyWeather.objects.filter(date=today).first()
+                if dw:
+                    air_temp = float(dw.temperature_c)
+                    rainfall  = 0
+    except Exception:
+        # Fallback — DailyWeather থেকে নাও
+        dw = DailyWeather.objects.filter(date=today).first()
+        if dw:
+            air_temp = float(dw.temperature_c)
+            rainfall  = 0
+
+    if air_temp is None:
+        return "No temperature data available"
+
+    # Water temp = Air temp - 2°C (estimate)
+    # পুকুরের পানি সাধারণত বাতাসের চেয়ে একটু ঠান্ডা থাকে
+    water_temp = round(air_temp - 2.0, 1)
+
+    # সব pond এ entry করো
+    ponds = Pond.objects.all()
+    count = 0
+
+    for pond in ponds:
+        # আজকে এই pond এ already entry আছে কিনা
+        exists = WeatherRecord.objects.filter(
+            pond=pond,
+            timestamp__date=today
+        ).exists()
+
+        if not exists:
+            WeatherRecord.objects.create(
+                pond=pond,
+                water_temp_c=water_temp,
+                dissolved_oxygen_mg_l=6.5,  # normal default
+                ph=7.0,                      # normal default
+                rainfall_mm=rainfall,
+                source="auto",
+            )
+            count += 1
+
+    return f"Auto logged water temp {water_temp}°C for {count} ponds"

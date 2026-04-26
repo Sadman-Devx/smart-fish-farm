@@ -176,17 +176,24 @@ DEFAULT_MARKET_WEIGHT_G = float(os.environ.get("DEFAULT_MARKET_WEIGHT_G", "500")
 CELERY_BROKER_URL = "redis://localhost:6379/0"
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 
+CELERY_TIMEZONE = 'Asia/Dhaka'
+CELERY_ENABLE_UTC = False
+
 CELERY_BEAT_SCHEDULE = {
     "daily-feed-alert-6am": {
         "task":     "farm.tasks.send_daily_feed_alert",
         "schedule": crontab(hour=6, minute=0),
+    },
+    "auto-log-water-temp-7am": {
+        "task":     "farm.tasks.auto_log_water_temperature",
+        "schedule": crontab(hour=9, minute=0),
     },
 }
 
 
 # ── Internationalisation ───────────────────────────────────────────────────────
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE     = 'UTC'
+TIME_ZONE = 'Asia/Dhaka'
 USE_I18N      = True
 USE_TZ        = True
 
