@@ -3,7 +3,9 @@
 {% block nav_harvest %}active{% endblock %}
 {% block topbar_title %}Harvest Records{% endblock %}
 {% block topbar_actions %}
+  {% if not is_guest %}
   <a href="{% url 'farm:harvest_create' %}" class="btn btn-accent btn-sm">+ Log Harvest</a>
+  {% endif %}
 {% endblock %}
 
 {% block content %}
@@ -29,7 +31,9 @@
 <div class="card">
   <div class="card-header">
     <span class="card-title">All Harvest Events</span>
+    {% if not is_guest %}
     <a href="{% url 'farm:harvest_create' %}" class="btn btn-sm btn-accent">+ New Harvest</a>
+    {% endif %}
   </div>
   {% if harvests %}
   <div class="table-responsive">
@@ -61,7 +65,9 @@
   <div class="card-body" style="text-align:center;padding:48px">
     <div style="font-size:40px;margin-bottom:12px">🎣</div>
     <p class="text-muted fs-sm">No harvest records yet.</p>
+    {% if not is_guest %}
     <a href="{% url 'farm:harvest_create' %}" class="btn btn-accent" style="margin-top:12px">Log First Harvest</a>
+    {% endif %}
   </div>
   {% endif %}
 </div>

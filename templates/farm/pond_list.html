@@ -4,6 +4,9 @@
 {% block topbar_title %}Ponds{% endblock %}
 
 {% block topbar_actions %}
+  {% if not is_guest %}
+  <a href="{% url 'farm:pond_create' %}" class="btn btn-accent btn-sm">+ Add Pond</a>
+  {% endif %}
   <a href="{% url 'farm:dashboard' %}" class="btn btn-sm">← Dashboard</a>
 {% endblock %}
 
@@ -45,7 +48,12 @@
   {% empty %}
   <div style="grid-column:1/-1">
     <div class="card card-body text-muted fs-sm" style="padding:32px;text-align:center">
-      No ponds created yet. Add them via the admin panel.
+      No ponds yet.
+      {% if not is_guest %}
+      <a href="{% url 'farm:pond_create' %}" class="btn btn-accent btn-sm" style="margin-top:12px;display:inline-block">
+        + Add Your First Pond
+      </a>
+      {% endif %}
     </div>
   </div>
   {% endfor %}

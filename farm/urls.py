@@ -24,8 +24,13 @@ urlpatterns = [
 
     # ── Ponds & Batches ────────────────────────────────────────────────────────
     path("ponds/",                    views.pond_list,         name="pond_list"),
+    path("ponds/add/",                views.pond_create,       name="pond_create"),
     path("ponds/<int:pk>/",           views.pond_detail,       name="pond_detail"),
+    path("batches/add/",              views.batch_create,      name="batch_create"),
     path("batches/<int:pk>/",         views.batch_detail,      name="batch_detail"),
+    # ── Batches (update/delete) ────────────────────────────────────────────────
+    path("batches/<int:pk>/edit/",    views.batch_update,      name="batch_update"),
+    path("batches/<int:pk>/delete/",  views.batch_delete,      name="batch_delete"),
 
     # ── Logging ────────────────────────────────────────────────────────────────
     path("weather/add/",              views.weather_create,    name="weather_create"),

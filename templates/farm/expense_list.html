@@ -3,7 +3,9 @@
 {% block nav_expenses %}active{% endblock %}
 {% block topbar_title %}Expenses{% endblock %}
 {% block topbar_actions %}
+  {% if not is_guest %}
   <a href="{% url 'farm:expense_create' %}" class="btn btn-accent btn-sm">+ Add Expense</a>
+  {% endif %}
 {% endblock %}
 
 {% block content %}
@@ -41,7 +43,9 @@
 <div class="card">
   <div class="card-header">
     <span class="card-title">All Expenses</span>
+    {% if not is_guest %}
     <a href="{% url 'farm:expense_create' %}" class="btn btn-sm btn-accent">+ Add</a>
+    {% endif %}
   </div>
   {% if expenses %}
   <div class="table-responsive">
@@ -70,7 +74,9 @@
   <div class="card-body" style="text-align:center;padding:48px">
     <div style="font-size:40px;margin-bottom:12px">💰</div>
     <p class="text-muted fs-sm">No expenses recorded yet.</p>
+    {% if not is_guest %}
     <a href="{% url 'farm:expense_create' %}" class="btn btn-accent" style="margin-top:12px">Add First Expense</a>
+    {% endif %}
   </div>
   {% endif %}
 </div>

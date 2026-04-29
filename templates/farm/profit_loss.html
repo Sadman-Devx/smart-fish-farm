@@ -5,7 +5,9 @@
 {% block topbar_actions %}
   <a href="{% url 'farm:expense_list' %}" class="btn btn-sm">Expenses</a>
   <a href="{% url 'farm:harvest_list' %}" class="btn btn-sm">Harvests</a>
+  {% if not is_guest %}
   <a href="{% url 'farm:expense_create' %}" class="btn btn-accent btn-sm">+ Add Expense</a>
+  {% endif %}
 {% endblock %}
 
 {% block content %}
@@ -112,7 +114,9 @@
         <div style="text-align:center;padding:48px 0;color:var(--muted)">
           <div style="font-size:36px;margin-bottom:10px">💰</div>
           <p class="fs-sm">No expenses this month</p>
+          {% if not is_guest %}
           <a href="{% url 'farm:expense_create' %}" class="btn btn-sm btn-accent" style="margin-top:12px">+ Add Expense</a>
+          {% endif %}
         </div>
       {% endif %}
     </div>

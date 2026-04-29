@@ -53,8 +53,8 @@ def send_whatsapp_notification(message: str) -> bool:
         client = Client(sid, token)
         client.messages.create(
             body=message[:1600],  # WhatsApp max length
-            from_=from_no,
-            to=to_no,
+            from_=f"whatsapp:{from_no}",
+            to=f"whatsapp:{to_no}",
         )
         print(f"[WhatsApp] Message sent to {to_no}")
         return True

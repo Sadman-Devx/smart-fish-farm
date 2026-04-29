@@ -47,7 +47,7 @@
           {% if alert.resolved %} · Resolved {{ alert.resolved_at|date:"M d, Y H:i" }}{% endif %}
         </div>
       </div>
-      {% if not alert.resolved %}
+      {% if not alert.resolved and not is_guest %}
       <form method="post" action="{% url 'farm:alert_resolve' alert.pk %}" style="flex-shrink:0">
         {% csrf_token %}
         <button type="submit" class="btn btn-sm btn-outline" style="color:var(--success);border-color:rgba(16,185,129,.3)">

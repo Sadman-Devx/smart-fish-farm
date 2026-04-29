@@ -338,7 +338,12 @@
         </a>
         {% endwith %}
       {% empty %}
-        <p class="text-muted fs-sm" style="padding:16px">No batches yet. Add fish batches via the admin panel.</p>
+        <div style="padding:16px;text-align:center">
+          <p class="text-muted fs-sm" style="margin-bottom:10px">No fish batches yet.</p>
+          {% if not is_guest %}
+          <a href="{% url 'farm:batch_create' %}" class="btn btn-accent btn-sm">+ Add Fish Batch</a>
+          {% endif %}
+        </div>
       {% endfor %}
     </div>
   </div>
@@ -378,7 +383,12 @@
 <div>
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
     <span class="card-title" style="font-size:15px">Ponds</span>
-    <a href="{% url 'farm:pond_list' %}" class="btn btn-sm btn-outline">View all →</a>
+    <div style="display:flex;gap:6px">
+      {% if not is_guest %}
+      <a href="{% url 'farm:pond_create' %}" class="btn btn-accent btn-sm">+ Add Pond</a>
+      {% endif %}
+      <a href="{% url 'farm:pond_list' %}" class="btn btn-sm btn-outline">View all →</a>
+    </div>
   </div>
   <div class="row-3">
     {% for pond in ponds %}
@@ -396,7 +406,12 @@
       </div>
     </a>
     {% empty %}
-      <p class="text-muted fs-sm">No ponds yet.</p>
+      <div style="grid-column:1/-1;text-align:center;padding:20px 0">
+        <p class="text-muted fs-sm" style="margin-bottom:10px">No ponds yet.</p>
+        {% if not is_guest %}
+        <a href="{% url 'farm:pond_create' %}" class="btn btn-accent btn-sm">+ Add Pond</a>
+        {% endif %}
+      </div>
     {% endfor %}
   </div>
 </div>

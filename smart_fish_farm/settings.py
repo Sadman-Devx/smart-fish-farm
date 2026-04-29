@@ -184,7 +184,7 @@ CELERY_BEAT_SCHEDULE = {
         "task":     "farm.tasks.send_daily_feed_alert",
         "schedule": crontab(hour=6, minute=0),
     },
-    "auto-log-water-temp-7am": {
+    "auto-log-water-temp-9am": {
         "task":     "farm.tasks.auto_log_water_temperature",
         "schedule": crontab(hour=9, minute=0),
     },

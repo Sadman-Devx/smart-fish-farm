@@ -5,10 +5,20 @@ from django.conf import settings
 
 # ── Pond ──────────────────────────────────────────────────────────────────────
 class Pond(models.Model):
-    name = models.CharField(max_length=100, unique=True)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="ponds",
+        null=True,  # null=True to handle existing data during migration
+        blank=True,
+    )
+    name = models.CharField(max_length=100)  # removed unique=True — name unique per user, not globally
     area_m2 = models.DecimalField(max_digits=8, decimal_places=2, help_text="Surface area in square meters")
     max_depth_m = models.DecimalField(max_digits=5, decimal_places=2, help_text="Maximum depth in meters")
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("owner", "name")  # name unique per user
 
     def __str__(self):
         return self.name

@@ -5,7 +5,9 @@
 
 {% block topbar_actions %}
   <a href="{% url 'farm:pond_list' %}" class="btn btn-sm">← Ponds</a>
+  {% if not is_guest %}
   <a href="{% url 'farm:weather_create' %}" class="btn btn-sm">+ Weather</a>
+  {% endif %}
 {% endblock %}
 
 {% block content %}
@@ -59,7 +61,9 @@
 {% else %}
 <div class="alert-strip alert-strip-info mb-16">
   ℹ No water records yet for this pond.
+  {% if not is_guest %}
   <a href="{% url 'farm:weather_create' %}" style="margin-left:auto">Log weather →</a>
+  {% endif %}
 </div>
 {% endif %}
 
