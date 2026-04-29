@@ -35,6 +35,7 @@ Analytics additions (2026-04):
 """
 from datetime import timedelta, date
 from decimal import Decimal
+import base64
 
 from django.db.models import Avg, Sum, Count, Q
 from django.db.models.functions import TruncDate, TruncMonth
@@ -45,6 +46,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
+import google.genai as genai
+from google.genai import types
 from .services.weather_ingest import get_weather_for_location, get_feeding_suggestion
 
 from .models import (
@@ -440,6 +443,17 @@ def pond_create(request):
 
 
 @login_required
+@require_POST
+def pond_delete(request, pk):
+    """Delete a pond belonging to the current user."""
+    pond = get_object_or_404(Pond, pk=pk, owner=request.user)
+    pond_name = pond.name
+    pond.delete()
+    messages.success(request, f"Pond '{pond_name}' deleted successfully.")
+    return redirect("farm:pond_list")
+
+
+@login_required
 def batch_create(request):
     """Create a new fish batch — only user's own ponds shown in dropdown."""
     if request.method == "POST":
@@ -454,40 +468,35 @@ def batch_create(request):
 
 
 @login_required
+@require_POST
 def batch_delete(request, pk):
-    """Delete a fish batch."""
-    if request.method == "POST":
-        from .models import FishBatch
-        batch = get_object_or_404(FishBatch, pk=pk, pond__owner=request.user)
-        batch.delete()
-        messages.success(request, "Fish batch deleted successfully.")
-        return redirect("farm:pond_list")
-    return redirect("farm:pond_list")
+    """Delete a fish batch belonging to current user."""
+    batch = get_object_or_404(FishBatch, pk=pk, pond__owner=request.user)
+    pond_pk = batch.pond_id
+    batch.delete()
+    messages.success(request, "Fish batch deleted successfully.")
+    return redirect("farm:pond_detail", pk=pond_pk)
 
 
 
 @login_required
 def batch_update(request, pk):
-    """Update a fish batch."""
-    
+    """Update a fish batch belonging to current user."""
     batch = get_object_or_404(FishBatch, pk=pk, pond__owner=request.user)
-    
+
     if request.method == "POST":
-        
-        form = FishBatchForm(request.POST, instance=batch, user=request.user)
+        form = forms.FishBatchForm(request.POST, instance=batch, user=request.user)
         if form.is_valid():
-            form.save()
+            updated_batch = form.save()
             messages.success(request, "Fish batch updated successfully.")
-            return redirect("farm:pond_list")  
+            return redirect("farm:batch_detail", pk=updated_batch.pk)
     else:
-        form = FishBatchForm(instance=batch, user=request.user)
-        
-    # simple_form.html 
+        form = forms.FishBatchForm(instance=batch, user=request.user)
+
     return render(request, "farm/simple_form.html", {
         "form": form,
         "title": "Update Fish Batch"
     })
-        
 
 
 
@@ -936,7 +945,6 @@ def mortality_report(request):
 # ─────────────────────────────────────────────────────────────────────────────
 
 @login_required
-@login_required
 def weather_create(request):
     if request.method == "POST":
         form = forms.WeatherRecordForm(request.POST, user=request.user)
@@ -1096,3 +1104,162 @@ def mark_feeding_done_view(request):
             reminder.save()
             messages.success(request, "Feeding marked as done!")
     return redirect("farm:dashboard")
+
+
+@login_required
+def ai_fish_disease_agent(request):
+    """
+    Fish disease chat assistant with image + follow-up conversation support.
+    """
+    selected_language = request.session.get("fish_ai_selected_language", "bangla")
+    custom_language = request.session.get("fish_ai_custom_language", "")
+    chat_history = request.session.get("fish_ai_chat_history", [])
+    uploaded_image_data_url = request.session.get("fish_ai_image_data_url", "")
+    response_label = "Bangla"
+
+    if request.method == "POST" and request.POST.get("clear_chat") == "1":
+        for key in (
+            "fish_ai_chat_history",
+            "fish_ai_image_data_url",
+            "fish_ai_image_part",
+            "fish_ai_selected_language",
+            "fish_ai_custom_language",
+        ):
+            request.session.pop(key, None)
+        messages.success(request, "AI chat cleared.")
+        return redirect("farm:ai_fish_disease_agent")
+
+    if request.method == "POST":
+        chat_form = forms.AIFishDiseaseChatForm(request.POST, request.FILES)
+        selected_language = (request.POST.get("language") or selected_language).strip().lower()
+        custom_language = (request.POST.get("custom_language") or custom_language).strip()
+
+        if not chat_form.is_valid():
+            for _, form_errors in chat_form.errors.items():
+                for err in form_errors:
+                    messages.error(request, err)
+            return redirect("farm:ai_fish_disease_agent")
+
+        selected_language = chat_form.cleaned_data["language"]
+        custom_language = chat_form.cleaned_data["custom_language"]
+        chat_message = chat_form.cleaned_data["chat_message"]
+        uploaded_image = chat_form.cleaned_data.get("fish_image")
+
+        request.session["fish_ai_selected_language"] = selected_language
+        request.session["fish_ai_custom_language"] = custom_language
+
+        if uploaded_image:
+            image_bytes = uploaded_image.read()
+            uploaded_image_data_url = (
+                f"data:{uploaded_image.content_type};base64,"
+                f"{base64.b64encode(image_bytes).decode('utf-8')}"
+            )
+            request.session["fish_ai_image_data_url"] = uploaded_image_data_url
+            request.session["fish_ai_image_part"] = {
+                "mime_type": uploaded_image.content_type,
+                "data_b64": base64.b64encode(image_bytes).decode("utf-8"),
+            }
+        elif not uploaded_image_data_url and not chat_history:
+            messages.error(request, "Please upload a fish image to start the chat.")
+            return redirect("farm:ai_fish_disease_agent")
+
+        gemini_api_key = getattr(settings, "GEMINI_API_KEY", "")
+        if not gemini_api_key:
+            messages.error(request, "GEMINI_API_KEY is missing in your .env file.")
+            return redirect("farm:ai_fish_disease_agent")
+
+        system_instruction = (
+            "Tumi ekjon expert Fisheries Pathologist ba Macher Rog Bishashoggo AI. "
+            "User macher chobi dile seti analyze kore roger nam, karon, ebong "
+            "step-by-step chikitsa (bullet points) Banglay dibe. Bhasha shohoj hobe. "
+            "Sheshe ekti disclaimer dibe je eti AI poramorsho, dorkare upojela motsho "
+            "kormokortar kache jete."
+        )
+
+        if selected_language == "english":
+            response_language_instruction = (
+                "Write the full response in simple English."
+            )
+            response_label = "English"
+        elif selected_language == "other":
+            target_language = custom_language or "the user's requested language"
+            response_language_instruction = (
+                f"Write the full response in {target_language}. "
+                "Use simple, farmer-friendly wording."
+            )
+            response_label = target_language
+        else:
+            response_language_instruction = (
+                "Write the full response in simple Bangla."
+            )
+            response_label = "Bangla"
+
+        try:
+            client = genai.Client(api_key=gemini_api_key)
+
+            prior_chat_context = []
+            for idx, msg in enumerate(chat_history[-12:], start=1):
+                role_label = "User" if msg.get("role") == "user" else "Assistant"
+                prior_chat_context.append(f"{idx}. {role_label}: {msg.get('text', '')}")
+
+            history_text = "\n".join(prior_chat_context) if prior_chat_context else "No previous messages."
+            prompt = (
+                f"{system_instruction}\n\n"
+                f"{response_language_instruction}\n\n"
+                "This is an ongoing chat. Keep continuity with previous messages and answer follow-up questions clearly.\n\n"
+                f"Previous conversation:\n{history_text}\n\n"
+                f"User's new message:\n{chat_message}\n\n"
+                "Output format:\n"
+                "1) Sambhabyo Roger Nam\n"
+                "2) Roger Karon\n"
+                "3) Dhape Dhape Chikitsa (bullet points)\n"
+                "4) Protirodh Tips\n"
+                "5) Disclaimer (oboshshoi thakbe)\n"
+            )
+
+            image_part_obj = None
+            image_part_dict = request.session.get("fish_ai_image_part")
+            if image_part_dict:
+                image_part_obj = types.Part.from_bytes(
+                    data=base64.b64decode(image_part_dict["data_b64"]),
+                    mime_type=image_part_dict["mime_type"],
+                )
+
+            response = None
+            candidate_models = [
+                "gemini-2.0-flash",
+                "gemini-2.5-flash",
+                "gemini-flash-latest",
+            ]
+            last_error = None
+
+            for model_name in candidate_models:
+                try:
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=[prompt, image_part_obj] if image_part_obj else [prompt],
+                    )
+                    break
+                except Exception as model_exc:
+                    last_error = model_exc
+
+            if response is None:
+                raise RuntimeError(f"All Gemini model attempts failed: {last_error}")
+            ai_response = (response.text or "").strip() or "Dukkhoito, kono uttor pawa jayni. Abar cheshta korun."
+            chat_history.append({"role": "user", "text": chat_message})
+            chat_history.append({"role": "assistant", "text": ai_response})
+            request.session["fish_ai_chat_history"] = chat_history[-20:]
+        except Exception as exc:
+            messages.error(request, f"Gemini API request failed: {exc}")
+
+    return render(
+        request,
+        "farm/ai_fish_disease_agent.html",
+        {
+            "chat_history": request.session.get("fish_ai_chat_history", []),
+            "uploaded_image_data_url": uploaded_image_data_url,
+            "selected_language": selected_language,
+            "custom_language": custom_language,
+            "response_language_label": response_label if request.session.get("fish_ai_chat_history", []) else "",
+        },
+    )

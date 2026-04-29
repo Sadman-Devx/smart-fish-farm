@@ -25,6 +25,7 @@ urlpatterns = [
     # ── Ponds & Batches ────────────────────────────────────────────────────────
     path("ponds/",                    views.pond_list,         name="pond_list"),
     path("ponds/add/",                views.pond_create,       name="pond_create"),
+    path("ponds/<int:pk>/delete/",    views.pond_delete,       name="pond_delete"),
     path("ponds/<int:pk>/",           views.pond_detail,       name="pond_detail"),
     path("batches/add/",              views.batch_create,      name="batch_create"),
     path("batches/<int:pk>/",         views.batch_detail,      name="batch_detail"),
@@ -57,4 +58,5 @@ urlpatterns = [
     path("reports/mortality/",        views.mortality_report,  name="mortality_report"),
     path("weather/refresh/",          views.refresh_weather_view, name="refresh_weather"),
     path("feeding/done/",             views.mark_feeding_done_view, name="mark_feeding_done"),
+    path("ai-fish-disease-agent/",    views.ai_fish_disease_agent, name="ai_fish_disease_agent"),
 ]

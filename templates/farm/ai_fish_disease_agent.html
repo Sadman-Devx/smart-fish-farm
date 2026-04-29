@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}AI Fish Disease Agent{% endblock %}
+{% block topbar_title %}AI Fish Disease Agent{% endblock %}
+{% block nav_ai_disease %}active{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{% url 'farm:dashboard' %}" class="btn btn-sm">← Dashboard</a>
+{% endblock %}
+
+{% block content %}
+<div class="page-header mb-16">
+  <div>
+    <h1>AI Fish Disease Agent</h1>
+  </div>
+</div>
+
+<div style="max-width: 980px; display: grid; gap: 16px;">
+  <div class="card">
+    <div class="card-body" style="display:grid; gap:14px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+        <div class="fs-xs text-muted">
+          {% if response_language_label %}Current response language: {{ response_language_label }}{% else %}Set language and start chat.{% endif %}
+        </div>
+        <form method="post" style="margin:0;">
+          {% csrf_token %}
+          <input type="hidden" name="clear_chat" value="1">
+          <button type="submit" class="btn btn-outline btn-sm">Clear Chat</button>
+        </form>
+      </div>
+
+      <div style="height: 420px; overflow-y: auto; background: var(--surface2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 10px;">
+        {% if chat_history %}
+          {% for msg in chat_history %}
+            {% if msg.role == "user" %}
+              <div style="display:flex; justify-content:flex-end;">
+                <div style="max-width:75%; background: rgba(59,130,246,.22); border:1px solid rgba(59,130,246,.45); border-radius:14px 14px 4px 14px; padding:10px 12px;">
+                  <div class="fs-xs text-muted" style="margin-bottom:4px;">You</div>
+                  <div style="white-space:pre-wrap; line-height:1.5;">{{ msg.text }}</div>
+                </div>
+              </div>
+            {% else %}
+              <div style="display:flex; justify-content:flex-start;">
+                <div style="max-width:75%; background: var(--surface3); border:1px solid var(--line); border-radius:14px 14px 14px 4px; padding:10px 12px;">
+                  <div class="fs-xs text-muted" style="margin-bottom:4px;">AI Fish Doctor</div>
+                  <div style="white-space:pre-wrap; line-height:1.6;">{{ msg.text }}</div>
+                </div>
+              </div>
+            {% endif %}
+          {% endfor %}
+        {% else %}
+          <div class="fs-xs text-muted">No messages yet. Upload fish image + write first question to begin.</div>
+        {% endif %}
+      </div>
+
+      {% if uploaded_image_data_url %}
+      <div style="display:flex; align-items:center; gap:12px; background:var(--surface2); border:1px dashed var(--line); border-radius:10px; padding:8px;">
+        <img
+          src="{{ uploaded_image_data_url }}"
+          alt="Uploaded fish image"
+          style="width:70px; height:70px; object-fit:cover; border-radius:8px; border:1px solid var(--line);"
+        >
+        <div class="fs-xs text-muted">Image context saved for follow-up questions.</div>
+      </div>
+      {% endif %}
+
+      <form method="post" enctype="multipart/form-data" style="display: grid; gap: 12px;">
+        {% csrf_token %}
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div>
+          <label class="form-label" for="language">Response Language</label>
+          <select
+            id="language"
+            name="language"
+            style="width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface2); color: var(--text);"
+          >
+            <option value="bangla" {% if selected_language|default:"bangla" == "bangla" %}selected{% endif %}>Bangla</option>
+            <option value="english" {% if selected_language == "english" %}selected{% endif %}>English</option>
+            <option value="other" {% if selected_language == "other" %}selected{% endif %}>Other Language</option>
+          </select>
+          </div>
+          <div id="custom-language-wrap" {% if selected_language != "other" %}style="display:none;"{% endif %}>
+            <label class="form-label" for="custom-language">Custom Language Name</label>
+            <input
+              id="custom-language"
+              type="text"
+              name="custom_language"
+              value="{{ custom_language }}"
+              placeholder="e.g. Hindi, Arabic, Tamil"
+              style="width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface2); color: var(--text);"
+            >
+          </div>
+        </div>
+
+        <div>
+          <label class="form-label" for="chat-message">Your Message</label>
+        <textarea
+            id="chat-message"
+            name="chat_message"
+            rows="3"
+            placeholder="Example: Ei macher rog ta ki? Chikitsa ki hobe?"
+            style="width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface2); color: var(--text); resize: vertical;"
+          required
+          ></textarea>
+        </div>
+
+        <div>
+          <label class="form-label" for="fish-image">Fish Image (optional in follow-up)</label>
+          <input
+            id="fish-image"
+            type="file"
+            name="fish_image"
+            accept="image/*"
+            style="width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface2); color: var(--text);"
+          >
+          <div class="form-text" style="margin-top: 6px;">
+            First message e image deya recommended. Later follow-up e na dileo cholbe.
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+          <span class="fs-xs text-muted">JPG/PNG/WebP (max 10MB). Clear, close-up image best result dey.</span>
+          <button type="submit" class="btn btn-accent">Send Message</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  (function () {
+    var languageSelect = document.getElementById("language");
+    var customWrap = document.getElementById("custom-language-wrap");
+    if (!languageSelect || !customWrap) return;
+
+    function syncCustomLanguageField() {
+      customWrap.style.display = languageSelect.value === "other" ? "block" : "none";
+    }
+
+    languageSelect.addEventListener("change", syncCustomLanguageField);
+    syncCustomLanguageField();
+  })();
+</script>
+{% endblock %}

@@ -5,6 +5,7 @@
 {% block topbar_actions %}
   <a href="{% url 'farm:pond_detail' batch.pond.pk %}" class="btn btn-sm">← {{ batch.pond.name }}</a>
   {% if request.user.is_authenticated %}
+    <a href="{% url 'farm:batch_create' %}" class="btn btn-accent btn-sm">+ Add Batch</a>
     <a href="{% url 'farm:batch_update' batch.pk %}" class="btn btn-sm btn-outline" title="Edit Batch Details">✏️ Edit</a>
     <a href="{% url 'farm:weather_create' %}" class="btn btn-sm">+ Weather</a>
     <a href="{% url 'farm:growth_create' %}"  class="btn btn-sm">+ Growth</a>

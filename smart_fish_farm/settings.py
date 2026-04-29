@@ -119,6 +119,10 @@ ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
 
 ACCOUNT_LOGIN_METHODS             = {'email'}
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None
+# Keep legacy allauth compatibility as some environments still validate these.
+ACCOUNT_AUTHENTICATION_METHOD     = 'email'
+ACCOUNT_USERNAME_REQUIRED         = False
+ACCOUNT_EMAIL_REQUIRED            = True
 ACCOUNT_EMAIL_VERIFICATION        = 'optional'
 
 ACCOUNT_LOGIN_URL                 = '/accounts/login/'
@@ -162,6 +166,7 @@ TWILIO_TO_NUMBER    = os.environ.get("TWILIO_TO_NUMBER", "")
 # ── Weather API ────────────────────────────────────────────────────────────────
 WEATHER_API_KEY  = os.environ.get("OPENWEATHER_API_KEY", "")
 WEATHER_LOCATION = os.environ.get("OPENWEATHER_LOCATION", "Chandpur,Bangladesh")
+GEMINI_API_KEY   = os.environ.get("GEMINI_API_KEY", "")
 
 
 # ── Farm analytics defaults ────────────────────────────────────────────────────

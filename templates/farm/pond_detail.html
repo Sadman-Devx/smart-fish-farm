@@ -6,6 +6,7 @@
 {% block topbar_actions %}
   <a href="{% url 'farm:pond_list' %}" class="btn btn-sm">← Ponds</a>
   {% if not is_guest %}
+  <a href="{% url 'farm:batch_create' %}" class="btn btn-accent btn-sm">+ Add Batch</a>
   <a href="{% url 'farm:weather_create' %}" class="btn btn-sm">+ Weather</a>
   {% endif %}
 {% endblock %}
@@ -71,7 +72,12 @@
 <div class="card">
   <div class="card-header">
     <span class="card-title">Fish Batches</span>
-    <span class="pill pill-accent">{{ batches.count }} batch{{ batches.count|pluralize:"es" }}</span>
+    <div class="d-flex align-center gap-8">
+      <span class="pill pill-accent">{{ batches.count }} batch{{ batches.count|pluralize:"es" }}</span>
+      {% if not is_guest %}
+      <a href="{% url 'farm:batch_create' %}" class="btn btn-sm">+ Add Batch</a>
+      {% endif %}
+    </div>
   </div>
   <div class="card-body" style="padding:10px">
     {% for batch in batches %}

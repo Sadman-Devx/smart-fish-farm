@@ -8,3 +8,4 @@ djangorestframework
 python-dotenv
 django-allauth==65.3.0
 cryptography
+google-genai
