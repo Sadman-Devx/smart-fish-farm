@@ -4,6 +4,8 @@ farm/urls.py
 Full URL config for the farm app — includes the new onboarding routes.
 """
 from django.urls import path
+
+from ai_agent_views import fish_disease_agent, fish_disease_chat
 from . import views
 from . import onboarding_views
 
@@ -58,5 +60,7 @@ urlpatterns = [
     path("reports/mortality/",        views.mortality_report,  name="mortality_report"),
     path("weather/refresh/",          views.refresh_weather_view, name="refresh_weather"),
     path("feeding/done/",             views.mark_feeding_done_view, name="mark_feeding_done"),
-    path("ai-fish-disease-agent/",    views.ai_fish_disease_agent, name="ai_fish_disease_agent"),
+
+    path("fish-doctor/", fish_disease_agent, name="fish_doctor"),
+    path("fish-doctor/chat/", fish_disease_chat, name="fish_doctor_chat"),
 ]

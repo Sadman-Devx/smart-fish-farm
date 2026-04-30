@@ -9,3 +9,4 @@ python-dotenv
 django-allauth==65.3.0
 cryptography
 google-genai
+Pillow>=10.0.0

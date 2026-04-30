@@ -166,7 +166,8 @@ TWILIO_TO_NUMBER    = os.environ.get("TWILIO_TO_NUMBER", "")
 # ── Weather API ────────────────────────────────────────────────────────────────
 WEATHER_API_KEY  = os.environ.get("OPENWEATHER_API_KEY", "")
 WEATHER_LOCATION = os.environ.get("OPENWEATHER_LOCATION", "Chandpur,Bangladesh")
-GEMINI_API_KEY   = os.environ.get("GEMINI_API_KEY", "")
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
 
 
 # ── Farm analytics defaults ────────────────────────────────────────────────────

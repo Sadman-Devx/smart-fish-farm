@@ -1,0 +1,688 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Fish Doctor AI{% endblock %}
+{% block nav_ai %}active{% endblock %}
+{% block topbar_actions %}
+{% if not is_guest %}
+  <a href="{% url 'farm:dashboard' %}" class="btn btn-accent btn-sm">Dashboard</a>
+  {% endif %}
+{% endblock %}
+{% block extra_head %}
+<style>
+/* ── Fish Doctor Page Layout ─────────────────────────────── */
+.fd-page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 60px);
+  padding: 0;
+  gap: 0;
+}
+
+/* ── Header ──────────────────────────────────────────────── */
+.fd-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 28px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.fd-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #00e5b4, #00b8ff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  box-shadow: 0 0 18px rgba(0,229,180,0.35);
+  flex-shrink: 0;
+  animation: pulse-avatar 3s ease-in-out infinite;
+}
+
+@keyframes pulse-avatar {
+  0%, 100% { box-shadow: 0 0 18px rgba(0,229,180,0.35); }
+  50%       { box-shadow: 0 0 30px rgba(0,229,180,0.6); }
+}
+
+.fd-header-info h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 2px;
+}
+.fd-header-info .fd-status {
+  font-size: 12px;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.fd-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: blink 1.8s ease-in-out infinite;
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+.fd-header-badge {
+  margin-left: auto;
+  background: rgba(0,229,180,0.1);
+  border: 1px solid rgba(0,229,180,0.25);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.5px;
+}
+
+/* ── Chat Window ─────────────────────────────────────────── */
+.fd-chat {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  scroll-behavior: smooth;
+}
+
+.fd-chat::-webkit-scrollbar { width: 5px; }
+.fd-chat::-webkit-scrollbar-track { background: transparent; }
+.fd-chat::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+/* ── Messages ────────────────────────────────────────────── */
+.fd-msg {
+  display: flex;
+  gap: 12px;
+  max-width: 82%;
+  animation: msg-in 0.3s ease-out;
+}
+
+@keyframes msg-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.fd-msg.user {
+  margin-left: auto;
+  flex-direction: row-reverse;
+}
+
+.fd-msg-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.fd-msg.bot  .fd-msg-icon { background: linear-gradient(135deg,#00e5b4,#00b8ff); }
+.fd-msg.user .fd-msg-icon { background: var(--surface3); border: 1px solid var(--border); }
+
+.fd-msg-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fd-msg-bubble {
+  padding: 13px 16px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.65;
+  word-break: break-word;
+}
+
+.fd-msg.bot  .fd-msg-bubble {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-top-left-radius: 4px;
+  color: var(--text);
+}
+.fd-msg.user .fd-msg-bubble {
+  background: linear-gradient(135deg, rgba(0,229,180,0.15), rgba(0,184,255,0.12));
+  border: 1px solid rgba(0,229,180,0.25);
+  border-top-right-radius: 4px;
+  color: var(--text);
+}
+
+/* Markdown-style formatting inside bot messages */
+.fd-msg-bubble strong { color: var(--accent); font-weight: 700; }
+.fd-msg-bubble em     { color: var(--accent2); }
+
+.fd-msg-bubble .disease-section {
+  margin: 8px 0 4px;
+  padding: 10px 12px;
+  background: rgba(0,0,0,0.25);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+}
+
+.fd-msg-meta {
+  font-size: 11px;
+  color: var(--muted);
+}
+.fd-msg.user .fd-msg-meta { text-align: right; }
+
+/* Image preview in message */
+.fd-msg-img {
+  max-width: 220px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+
+/* ── Typing Indicator ────────────────────────────────────── */
+.fd-typing {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 12px 16px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  border-top-left-radius: 4px;
+  width: fit-content;
+}
+.fd-typing span {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: typing-dot 1.2s ease-in-out infinite;
+}
+.fd-typing span:nth-child(2) { animation-delay: 0.2s; background: var(--accent2); }
+.fd-typing span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes typing-dot {
+  0%, 80%, 100% { transform: scale(0.7); opacity: 0.5; }
+  40%           { transform: scale(1);   opacity: 1; }
+}
+
+/* ── Suggestion Pills ────────────────────────────────────── */
+.fd-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 28px 14px;
+}
+.fd-pill {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  padding: 6px 13px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.fd-pill:hover {
+  border-color: var(--accent2);
+  color: var(--accent2);
+  background: rgba(0,184,255,0.08);
+}
+
+/* ── Input Bar ───────────────────────────────────────────── */
+.fd-input-bar {
+  padding: 14px 28px 18px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+/* Image preview strip */
+.fd-img-preview {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.fd-img-preview.visible { display: flex; }
+.fd-img-thumb {
+  width: 40px; height: 40px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+.fd-img-remove {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color 0.2s;
+}
+.fd-img-remove:hover { color: var(--danger); }
+
+.fd-input-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.fd-input-wrap {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  background: var(--surface2);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  padding: 10px 14px;
+  gap: 10px;
+  transition: border-color 0.2s;
+}
+.fd-input-wrap:focus-within { border-color: var(--accent2); }
+
+#fd-text {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  resize: none;
+  line-height: 1.5;
+  max-height: 120px;
+  min-height: 24px;
+  overflow-y: auto;
+}
+#fd-text::placeholder { color: var(--muted); }
+
+.fd-upload-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 20px;
+  padding: 2px;
+  transition: color 0.2s;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.fd-upload-btn:hover { color: var(--accent2); }
+
+.fd-send-btn {
+  width: 46px; height: 46px;
+  border-radius: 12px;
+  border: none;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  color: #0a1628;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: opacity 0.2s, transform 0.15s;
+  font-weight: 700;
+}
+.fd-send-btn:hover:not(:disabled)  { opacity: 0.85; transform: scale(1.05); }
+.fd-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Welcome Screen ──────────────────────────────────────── */
+.fd-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  flex: 1;
+  gap: 16px;
+  padding: 40px 20px;
+  color: var(--muted);
+}
+.fd-welcome-icon {
+  font-size: 60px;
+  line-height: 1;
+  filter: drop-shadow(0 0 20px rgba(0,229,180,0.4));
+}
+.fd-welcome h3 {
+  font-size: 20px;
+  color: var(--text);
+  margin: 0;
+}
+.fd-welcome p {
+  font-size: 13px;
+  max-width: 380px;
+  line-height: 1.6;
+}
+.fd-welcome-features {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 4px;
+}
+.fd-feature-tag {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  color: var(--accent2);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="fd-page">
+
+  <!-- ── Header ───────────────────────────────────────────── -->
+  <div class="fd-header">
+    <div class="fd-avatar">🐟</div>
+    <div class="fd-header-info">
+      <h2>Fish Doctor</h2>
+      <div class="fd-status">
+        <div class="fd-status-dot"></div>
+        অনলাইন — সাহায্যের জন্য প্রস্তুত
+      </div>
+    </div>
+    <div class="fd-header-badge">AI বিশেষজ্ঞ</div>
+  </div>
+
+  <!-- ── Chat Messages ─────────────────────────────────────── -->
+  <div class="fd-chat" id="fd-chat">
+
+    <!-- Welcome state (hidden when messages start) -->
+    <div class="fd-welcome" id="fd-welcome">
+      <div class="fd-welcome-icon">🐠</div>
+      <h3>আমি Fish Doctor!</h3>
+      <p>মাছের রোগ, পানির গুণমান, খাদ্য ব্যবস্থাপনা — যেকোনো বিষয়ে জিজ্ঞেস করো। ছবি দিলে আরো ভালো সাহায্য করতে পারব।</p>
+      <div class="fd-welcome-features">
+        <span class="fd-feature-tag">📸 ছবি দিয়ে রোগ সনাক্ত</span>
+        <span class="fd-feature-tag">💬 স্বাভাবিক কথোপকথন</span>
+        <span class="fd-feature-tag">💊 চিকিৎসার পরামর্শ</span>
+        <span class="fd-feature-tag">🛡️ রোগ প্রতিরোধ</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Quick Suggestions ─────────────────────────────────── -->
+  <div class="fd-suggestions" id="fd-suggestions">
+    <button class="fd-pill" onclick="sendPill(this)">🐟 মাছ মরে যাচ্ছে কেন?</button>
+    <button class="fd-pill" onclick="sendPill(this)">💧 পানির pH কত থাকা উচিত?</button>
+    <button class="fd-pill" onclick="sendPill(this)">🍽️ কতটুকু খাবার দিতে হবে?</button>
+    <button class="fd-pill" onclick="sendPill(this)">🔴 মাছের গায়ে লাল দাগ</button>
+    <button class="fd-pill" onclick="sendPill(this)">😷 মাছ ভাসছে কেন?</button>
+  </div>
+
+  <!-- ── Input Bar ─────────────────────────────────────────── -->
+  <div class="fd-input-bar">
+
+    <!-- Image preview -->
+    <div class="fd-img-preview" id="fd-img-preview">
+      <img id="fd-img-thumb" class="fd-img-thumb" src="" alt="preview">
+      <span id="fd-img-name">ছবি নির্বাচিত</span>
+      <button class="fd-img-remove" onclick="removeImage()" title="সরাও">✕</button>
+    </div>
+
+    <div class="fd-input-row">
+      <div class="fd-input-wrap">
+        <textarea
+          id="fd-text"
+          placeholder="মাছের সমস্যা লিখুন বা ছবি দিন…"
+          rows="1"
+          onkeydown="handleKey(event)"
+          oninput="autoResize(this)"
+        ></textarea>
+        <input type="file" id="fd-file-input" accept="image/*" style="display:none" onchange="handleImageSelect(event)">
+        <button class="fd-upload-btn" onclick="document.getElementById('fd-file-input').click()" title="ছবি আপলোড">📎</button>
+      </div>
+      <button class="fd-send-btn" id="fd-send" onclick="sendMessage()" title="পাঠাও">➤</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const chatEl   = document.getElementById('fd-chat');
+const welcomeEl = document.getElementById('fd-welcome');
+const suggestEl = document.getElementById('fd-suggestions');
+const textEl   = document.getElementById('fd-text');
+const sendBtn  = document.getElementById('fd-send');
+const previewEl = document.getElementById('fd-img-preview');
+const thumbEl  = document.getElementById('fd-img-thumb');
+const nameEl   = document.getElementById('fd-img-name');
+
+let chatHistory = [];   // {role, content} pairs for context
+let selectedImage = null;   // {dataUrl, type, name}
+let isSending = false;
+
+// ── Auto-resize textarea ──────────────────────────────────────────────────
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+// ── Key handler (Enter to send, Shift+Enter = newline) ────────────────────
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+
+// ── Image selection ───────────────────────────────────────────────────────
+function handleImageSelect(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    selectedImage = {
+      dataUrl: e.target.result,
+      type: file.type || 'image/jpeg',
+      name: file.name,
+    };
+    thumbEl.src = e.target.result;
+    nameEl.textContent = file.name;
+    previewEl.classList.add('visible');
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeImage() {
+  selectedImage = null;
+  document.getElementById('fd-file-input').value = '';
+  previewEl.classList.remove('visible');
+}
+
+// ── Suggestion pills ──────────────────────────────────────────────────────
+function sendPill(btn) {
+  textEl.value = btn.textContent.trim().replace(/^[^\s]+\s/, '');
+  sendMessage();
+}
+
+// ── Timestamp ─────────────────────────────────────────────────────────────
+function getTime() {
+  return new Date().toLocaleTimeString('bn-BD', {hour:'2-digit', minute:'2-digit'});
+}
+
+// ── Hide welcome & suggestions once chat starts ───────────────────────────
+function hideWelcome() {
+  if (welcomeEl) { welcomeEl.style.display = 'none'; }
+  if (suggestEl) { suggestEl.style.display = 'none'; }
+}
+
+// ── Render markdown-ish text (bold, emoji sections) ──────────────────────
+function renderText(text) {
+  // Bold: **text**
+  text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  // Italic: *text*
+  text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
+  // Newlines
+  text = text.replace(/\n/g, '<br>');
+  return text;
+}
+
+// ── Append a message bubble ───────────────────────────────────────────────
+function appendMessage(role, text, imgSrc) {
+  hideWelcome();
+
+  const isUser = role === 'user';
+  const wrap = document.createElement('div');
+  wrap.className = `fd-msg ${isUser ? 'user' : 'bot'}`;
+
+  const iconEl = document.createElement('div');
+  iconEl.className = 'fd-msg-icon';
+  iconEl.textContent = isUser ? '👤' : '🐟';
+
+  const bodyEl = document.createElement('div');
+  bodyEl.className = 'fd-msg-body';
+
+  if (imgSrc) {
+    const img = document.createElement('img');
+    img.className = 'fd-msg-img';
+    img.src = imgSrc;
+    bodyEl.appendChild(img);
+  }
+
+  const bubbleEl = document.createElement('div');
+  bubbleEl.className = 'fd-msg-bubble';
+  bubbleEl.innerHTML = isUser ? escapeHtml(text) : renderText(text);
+  bodyEl.appendChild(bubbleEl);
+
+  const metaEl = document.createElement('div');
+  metaEl.className = 'fd-msg-meta';
+  metaEl.textContent = getTime();
+  bodyEl.appendChild(metaEl);
+
+  wrap.appendChild(iconEl);
+  wrap.appendChild(bodyEl);
+  chatEl.appendChild(wrap);
+  chatEl.scrollTop = chatEl.scrollHeight;
+  return wrap;
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Typing indicator ──────────────────────────────────────────────────────
+function showTyping() {
+  const wrap = document.createElement('div');
+  wrap.className = 'fd-msg bot';
+  wrap.id = 'fd-typing-indicator';
+
+  const iconEl = document.createElement('div');
+  iconEl.className = 'fd-msg-icon';
+  iconEl.textContent = '🐟';
+
+  const typing = document.createElement('div');
+  typing.className = 'fd-typing';
+  typing.innerHTML = '<span></span><span></span><span></span>';
+
+  wrap.appendChild(iconEl);
+  wrap.appendChild(typing);
+  chatEl.appendChild(wrap);
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+function hideTyping() {
+  const el = document.getElementById('fd-typing-indicator');
+  if (el) el.remove();
+}
+
+// ── Main send function ────────────────────────────────────────────────────
+async function sendMessage() {
+  if (isSending) return;
+
+  const text = textEl.value.trim();
+  const img  = selectedImage;
+
+  if (!text && !img) return;
+
+  isSending = true;
+  sendBtn.disabled = true;
+
+  // Show user message
+  appendMessage('user', text || '📸 ছবি পাঠানো হয়েছে', img ? img.dataUrl : null);
+
+  // Update history
+  if (text) chatHistory.push({ role: 'user', content: text });
+
+  // Clear input
+  textEl.value = '';
+  autoResize(textEl);
+  removeImage();
+
+  // Show typing
+  showTyping();
+
+  try {
+    const payload = {
+      message: text,
+      history: chatHistory.slice(0, -1), // exclude current turn (already added)
+    };
+    if (img) {
+      payload.image      = img.dataUrl;
+      payload.image_type = img.type;
+    }
+
+    const res = await fetch("{% url 'farm:fish_doctor_chat' %}", {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrf(),
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    hideTyping();
+
+    if (data.success) {
+      appendMessage('bot', data.reply);
+      chatHistory.push({ role: 'assistant', content: data.reply });
+      // Keep history trimmed
+      if (chatHistory.length > 40) chatHistory = chatHistory.slice(-40);
+    } else {
+      appendMessage('bot', '⚠️ ' + (data.error || 'কিছু একটা সমস্যা হয়েছে। আবার চেষ্টা করুন।'));
+    }
+
+  } catch (err) {
+    hideTyping();
+    appendMessage('bot', '⚠️ নেটওয়ার্ক সমস্যা। ইন্টারনেট সংযোগ পরীক্ষা করুন।');
+    console.error(err);
+  } finally {
+    isSending = false;
+    sendBtn.disabled = false;
+    textEl.focus();
+  }
+}
+
+// ── CSRF helper ───────────────────────────────────────────────────────────
+function getCsrf() {
+  const el = document.cookie.split(';').find(c => c.trim().startsWith('csrftoken='));
+  return el ? el.split('=')[1] : '';
+}
+
+// ── Focus input on load ───────────────────────────────────────────────────
+textEl.focus();
+</script>
+{% endblock %}

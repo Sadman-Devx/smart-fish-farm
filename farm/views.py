@@ -708,11 +708,9 @@ def alert_list(request):
 
 def profit_loss_report(request):
     """
-    FEATURE 2: Enhanced profit/loss report with:
-    - Expense doughnut chart by category
-    - 6-month revenue vs cost bar chart
-    - Feed cost vs harvest revenue line chart
-    - Combined transaction table
+    FEATURE 2: Enhanced profit/loss report.
+    FIX: `user` was referenced inside the `else` branch but never assigned,
+    causing a NameError for every authenticated visitor.
     """
     is_guest  = not request.user.is_authenticated
     today     = timezone.now().date()
@@ -721,12 +719,14 @@ def profit_loss_report(request):
         year, month = int(month_str.split("-")[0]), int(month_str.split("-")[1])
     except Exception:
         year, month = today.year, today.month
-
+ 
     start = date(year, month, 1)
     end   = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
-
+ 
+    # FIX: define user here, before it is used in either branch
+    user = request.user if not is_guest else None
+ 
     if is_guest:
-        user = None
         harvests_qs   = HarvestRecord.objects.none()
         revenue       = 0
         expenses_qs   = Expense.objects.none()
@@ -742,42 +742,53 @@ def profit_loss_report(request):
         total_expense = float(expenses_qs.aggregate(t=Sum("amount"))["t"] or 0)
         feed_qs       = _user_feed_logs(user).filter(date__gte=start, date__lt=end)
         feed_kg       = float(feed_qs.aggregate(kg=Sum("feed_amount_kg"))["kg"] or 0)
+ 
     feed_cost_per_kg = float(getattr(settings, "FEED_COST_PER_KG", 1.2))
     feed_cost     = round(feed_kg * feed_cost_per_kg, 2)
-
     total_cost    = round(total_expense + feed_cost, 2)
     net_profit    = round(revenue - total_cost, 2)
     margin_pct    = round((net_profit / revenue * 100) if revenue > 0 else 0, 1)
-
+ 
     by_category   = list(
         expenses_qs.values("category")
         .annotate(total=Sum("amount"))
         .order_by("-total")
     )
-
+ 
     # ── Expense doughnut chart data ───────────────────────────────────────────
     expense_cat_labels = []
     expense_cat_values = []
-    # Include feed cost as a category
     if feed_cost > 0:
         expense_cat_labels.append("Feed (calculated)")
         expense_cat_values.append(round(feed_cost, 2))
     for row in by_category:
         expense_cat_labels.append(row["category"].replace("_", " ").title())
         expense_cat_values.append(round(float(row["total"]), 2))
-
+ 
     # ── 6-month trend data ────────────────────────────────────────────────────
     monthly_trend = []
     if not is_guest:
         for i in range(5, -1, -1):
             m_start = (today.replace(day=1) - timedelta(days=i * 30)).replace(day=1)
-            m_end   = date(m_start.year + 1, 1, 1) if m_start.month == 12 else date(m_start.year, m_start.month + 1, 1)
+            m_end   = (
+                date(m_start.year + 1, 1, 1)
+                if m_start.month == 12
+                else date(m_start.year, m_start.month + 1, 1)
+            )
             m_rev   = sum(
                 h.gross_revenue for h in
                 _user_harvests(user).filter(harvest_date__gte=m_start, harvest_date__lt=m_end)
             )
-            m_exp   = float(_user_expenses(user).filter(date__gte=m_start, date__lt=m_end).aggregate(t=Sum("amount"))["t"] or 0)
-            m_feed_kg = float(_user_feed_logs(user).filter(date__gte=m_start, date__lt=m_end).aggregate(kg=Sum("feed_amount_kg"))["kg"] or 0)
+            m_exp   = float(
+                _user_expenses(user)
+                .filter(date__gte=m_start, date__lt=m_end)
+                .aggregate(t=Sum("amount"))["t"] or 0
+            )
+            m_feed_kg = float(
+                _user_feed_logs(user)
+                .filter(date__gte=m_start, date__lt=m_end)
+                .aggregate(kg=Sum("feed_amount_kg"))["kg"] or 0
+            )
             m_feed_cost = round(m_feed_kg * feed_cost_per_kg, 2)
             m_cost  = round(m_exp + m_feed_cost, 2)
             monthly_trend.append({
@@ -788,8 +799,8 @@ def profit_loss_report(request):
                 "feed_cost": m_feed_cost,
                 "other_exp": round(m_exp, 2),
             })
-
-    # ── Combined transaction list for this month ───────────────────────────────
+ 
+    # ── Combined transaction list ─────────────────────────────────────────────
     transactions = []
     for h in harvests_qs:
         transactions.append({
@@ -808,28 +819,27 @@ def profit_loss_report(request):
             "sign":        "−",
         })
     transactions.sort(key=lambda x: x["date"], reverse=True)
-
+ 
     return render(request, "farm/profit_loss.html", {
-        "is_guest": is_guest,
-        "month_str": month_str,
-        "start": start, "end": end,
-        "harvests": harvests_qs,
-        "expenses": expenses_qs,
-        "revenue": round(revenue, 2),
-        "feed_cost": feed_cost,
-        "feed_kg": round(feed_kg, 2),
-        "total_expense": total_expense,
-        "total_cost": total_cost,
-        "net_profit": net_profit,
-        "margin_pct": margin_pct,
-        "by_category": by_category,
-        "monthly_trend": monthly_trend,
-        # Enhanced chart data
+        "is_guest":          is_guest,
+        "month_str":         month_str,
+        "start":             start,
+        "end":               end,
+        "harvests":          harvests_qs,
+        "expenses":          expenses_qs,
+        "revenue":           round(revenue, 2),
+        "feed_cost":         feed_cost,
+        "feed_kg":           round(feed_kg, 2),
+        "total_expense":     total_expense,
+        "total_cost":        total_cost,
+        "net_profit":        net_profit,
+        "margin_pct":        margin_pct,
+        "by_category":       by_category,
+        "monthly_trend":     monthly_trend,
         "expense_cat_labels": expense_cat_labels,
         "expense_cat_values": expense_cat_values,
-        "transactions": transactions,
+        "transactions":      transactions,
     })
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # FEATURE 3: Mortality Report — PUBLIC (read-only)
@@ -1104,162 +1114,3 @@ def mark_feeding_done_view(request):
             reminder.save()
             messages.success(request, "Feeding marked as done!")
     return redirect("farm:dashboard")
-
-
-@login_required
-def ai_fish_disease_agent(request):
-    """
-    Fish disease chat assistant with image + follow-up conversation support.
-    """
-    selected_language = request.session.get("fish_ai_selected_language", "bangla")
-    custom_language = request.session.get("fish_ai_custom_language", "")
-    chat_history = request.session.get("fish_ai_chat_history", [])
-    uploaded_image_data_url = request.session.get("fish_ai_image_data_url", "")
-    response_label = "Bangla"
-
-    if request.method == "POST" and request.POST.get("clear_chat") == "1":
-        for key in (
-            "fish_ai_chat_history",
-            "fish_ai_image_data_url",
-            "fish_ai_image_part",
-            "fish_ai_selected_language",
-            "fish_ai_custom_language",
-        ):
-            request.session.pop(key, None)
-        messages.success(request, "AI chat cleared.")
-        return redirect("farm:ai_fish_disease_agent")
-
-    if request.method == "POST":
-        chat_form = forms.AIFishDiseaseChatForm(request.POST, request.FILES)
-        selected_language = (request.POST.get("language") or selected_language).strip().lower()
-        custom_language = (request.POST.get("custom_language") or custom_language).strip()
-
-        if not chat_form.is_valid():
-            for _, form_errors in chat_form.errors.items():
-                for err in form_errors:
-                    messages.error(request, err)
-            return redirect("farm:ai_fish_disease_agent")
-
-        selected_language = chat_form.cleaned_data["language"]
-        custom_language = chat_form.cleaned_data["custom_language"]
-        chat_message = chat_form.cleaned_data["chat_message"]
-        uploaded_image = chat_form.cleaned_data.get("fish_image")
-
-        request.session["fish_ai_selected_language"] = selected_language
-        request.session["fish_ai_custom_language"] = custom_language
-
-        if uploaded_image:
-            image_bytes = uploaded_image.read()
-            uploaded_image_data_url = (
-                f"data:{uploaded_image.content_type};base64,"
-                f"{base64.b64encode(image_bytes).decode('utf-8')}"
-            )
-            request.session["fish_ai_image_data_url"] = uploaded_image_data_url
-            request.session["fish_ai_image_part"] = {
-                "mime_type": uploaded_image.content_type,
-                "data_b64": base64.b64encode(image_bytes).decode("utf-8"),
-            }
-        elif not uploaded_image_data_url and not chat_history:
-            messages.error(request, "Please upload a fish image to start the chat.")
-            return redirect("farm:ai_fish_disease_agent")
-
-        gemini_api_key = getattr(settings, "GEMINI_API_KEY", "")
-        if not gemini_api_key:
-            messages.error(request, "GEMINI_API_KEY is missing in your .env file.")
-            return redirect("farm:ai_fish_disease_agent")
-
-        system_instruction = (
-            "Tumi ekjon expert Fisheries Pathologist ba Macher Rog Bishashoggo AI. "
-            "User macher chobi dile seti analyze kore roger nam, karon, ebong "
-            "step-by-step chikitsa (bullet points) Banglay dibe. Bhasha shohoj hobe. "
-            "Sheshe ekti disclaimer dibe je eti AI poramorsho, dorkare upojela motsho "
-            "kormokortar kache jete."
-        )
-
-        if selected_language == "english":
-            response_language_instruction = (
-                "Write the full response in simple English."
-            )
-            response_label = "English"
-        elif selected_language == "other":
-            target_language = custom_language or "the user's requested language"
-            response_language_instruction = (
-                f"Write the full response in {target_language}. "
-                "Use simple, farmer-friendly wording."
-            )
-            response_label = target_language
-        else:
-            response_language_instruction = (
-                "Write the full response in simple Bangla."
-            )
-            response_label = "Bangla"
-
-        try:
-            client = genai.Client(api_key=gemini_api_key)
-
-            prior_chat_context = []
-            for idx, msg in enumerate(chat_history[-12:], start=1):
-                role_label = "User" if msg.get("role") == "user" else "Assistant"
-                prior_chat_context.append(f"{idx}. {role_label}: {msg.get('text', '')}")
-
-            history_text = "\n".join(prior_chat_context) if prior_chat_context else "No previous messages."
-            prompt = (
-                f"{system_instruction}\n\n"
-                f"{response_language_instruction}\n\n"
-                "This is an ongoing chat. Keep continuity with previous messages and answer follow-up questions clearly.\n\n"
-                f"Previous conversation:\n{history_text}\n\n"
-                f"User's new message:\n{chat_message}\n\n"
-                "Output format:\n"
-                "1) Sambhabyo Roger Nam\n"
-                "2) Roger Karon\n"
-                "3) Dhape Dhape Chikitsa (bullet points)\n"
-                "4) Protirodh Tips\n"
-                "5) Disclaimer (oboshshoi thakbe)\n"
-            )
-
-            image_part_obj = None
-            image_part_dict = request.session.get("fish_ai_image_part")
-            if image_part_dict:
-                image_part_obj = types.Part.from_bytes(
-                    data=base64.b64decode(image_part_dict["data_b64"]),
-                    mime_type=image_part_dict["mime_type"],
-                )
-
-            response = None
-            candidate_models = [
-                "gemini-2.0-flash",
-                "gemini-2.5-flash",
-                "gemini-flash-latest",
-            ]
-            last_error = None
-
-            for model_name in candidate_models:
-                try:
-                    response = client.models.generate_content(
-                        model=model_name,
-                        contents=[prompt, image_part_obj] if image_part_obj else [prompt],
-                    )
-                    break
-                except Exception as model_exc:
-                    last_error = model_exc
-
-            if response is None:
-                raise RuntimeError(f"All Gemini model attempts failed: {last_error}")
-            ai_response = (response.text or "").strip() or "Dukkhoito, kono uttor pawa jayni. Abar cheshta korun."
-            chat_history.append({"role": "user", "text": chat_message})
-            chat_history.append({"role": "assistant", "text": ai_response})
-            request.session["fish_ai_chat_history"] = chat_history[-20:]
-        except Exception as exc:
-            messages.error(request, f"Gemini API request failed: {exc}")
-
-    return render(
-        request,
-        "farm/ai_fish_disease_agent.html",
-        {
-            "chat_history": request.session.get("fish_ai_chat_history", []),
-            "uploaded_image_data_url": uploaded_image_data_url,
-            "selected_language": selected_language,
-            "custom_language": custom_language,
-            "response_language_label": response_label if request.session.get("fish_ai_chat_history", []) else "",
-        },
-    )

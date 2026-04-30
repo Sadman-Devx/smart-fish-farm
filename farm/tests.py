@@ -646,19 +646,19 @@ class ModelPropertyTests(TestCase):
 
 class ServiceTests(TestCase):
     """Unit tests for feed_calculator and growth_prediction services."""
-
+ 
     def setUp(self):
         self.pond    = make_pond("Service Pond")
         self.batch   = make_batch(self.pond, count=2000, weight_g=80.0)
         make_feeding_profile()          # 20–32°C → 3% of biomass
         make_daily_weather(temp=27.0)   # factor = 1.0
         make_weather(self.pond, temp=27.0)
-
+ 
     def test_smart_feed_returns_positive_value(self):
         result = smart_feed_kg_for_batch(self.batch)
         self.assertIsNotNone(result, "Feed calculator should return a value")
         self.assertGreater(result, 0)
-
+ 
     def test_smart_feed_calculation_is_correct(self):
         """
         Biomass = 2000 × 80g = 160 kg
@@ -668,13 +668,29 @@ class ServiceTests(TestCase):
         """
         result = smart_feed_kg_for_batch(self.batch)
         self.assertAlmostEqual(result, 4.8, delta=0.05)
-
-    def test_smart_feed_returns_none_without_profile(self):
-        """Without a matching FeedingProfile there should be no recommendation."""
+ 
+    def test_smart_feed_falls_back_to_default_rate_without_profile(self):
+        """
+        FIX (was: test_smart_feed_returns_none_without_profile)
+ 
+        The original test asserted assertIsNone() but that is wrong.
+        When no FeedingProfile matches, the calculator uses the built-in
+        DEFAULT_FEED_RATE_PCT = 3.0 % and still returns a positive float.
+ 
+        Biomass = 160 kg, default rate 3 %, factor 1.0 → 4.8 kg.
+        """
         FeedingProfile.objects.all().delete()
         result = smart_feed_kg_for_batch(self.batch)
-        self.assertIsNone(result)
-
+        self.assertIsNotNone(result,
+            "Feed calculator must use the built-in 3% default when no "
+            "FeedingProfile is configured — it must not return None.")
+        self.assertGreater(result, 0,
+            "Feed calculator must return a positive value even without a profile.")
+        # Should still be close to 4.8 kg (same default rate)
+        self.assertAlmostEqual(result, 4.8, delta=0.1,
+            msg="Default rate should produce approximately the same result "
+                "as a 3%-profile for this batch.")
+ 
     def test_growth_prediction_returns_required_keys(self):
         result = predict_batch_growth(self.batch)
         required = [
@@ -688,12 +704,14 @@ class ServiceTests(TestCase):
         ]
         for key in required:
             self.assertIn(key, result, f"Prediction missing key: {key}")
-
+ 
     def test_growth_prediction_current_weight_matches_batch(self):
         result = predict_batch_growth(self.batch)
         self.assertAlmostEqual(result["current_avg_weight_g"], 80.0, delta=1.0)
-
+ 
     def test_growth_prediction_uses_latest_growth_record(self):
+        from decimal import Decimal
+        from datetime import date
         GrowthRecord.objects.create(
             batch=self.batch,
             date=date.today(),
@@ -702,7 +720,7 @@ class ServiceTests(TestCase):
         )
         result = predict_batch_growth(self.batch)
         self.assertAlmostEqual(result["current_avg_weight_g"], 250.0, delta=1.0)
-
+ 
     def test_growth_prediction_days_to_market_decreases_with_higher_weight(self):
         """A heavier batch should need fewer days to reach market weight."""
         light_batch = make_batch(self.pond, species="carp", count=500, weight_g=50.0)

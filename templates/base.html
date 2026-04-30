@@ -100,6 +100,7 @@
           <span class="nav-icon">💀</span> Log Mortality
           <span class="nav-badge" style="font-size:9px;opacity:.7">🔒</span>
         </span>
+        
       {% endif %}
 
       <div class="nav-section">Finance</div>
@@ -135,14 +136,16 @@
          class="nav-item {% block nav_mortality_report %}{% endblock %}">
         <span class="nav-icon">📉</span> Mortality Report
       </a>
+      
       <a href="{% url 'farm:reminder_list' %}"
          class="nav-item {% block nav_reminders %}{% endblock %}">
         <span class="nav-icon">🔔</span> Reminders
       </a>
-      <a href="{% url 'farm:ai_fish_disease_agent' %}"
-         class="nav-item {% block nav_ai_disease %}{% endblock %}">
-        <span class="nav-icon">🧠</span> AI Fish Disease Agent
-      </a>
+      <div class="nav-section">AI Assistant</div>
+       <a href="{% url 'farm:fish_doctor' %}"
+         class="nav-item {% block nav_ai %}{% endblock %}">
+         <span class="nav-icon">🐟</span> Fish Doctor
+       </a>
 
       <div class="nav-section">Account</div>
       {% if request.user.is_authenticated %}
