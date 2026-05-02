@@ -194,6 +194,10 @@ CELERY_BEAT_SCHEDULE = {
         "task":     "farm.tasks.auto_log_water_temperature",
         "schedule": crontab(hour=9, minute=0),
     },
+    "run-predictive-alerts-hourly": {
+        "task":     "farm.tasks.run_predictive_alerts_task",
+        "schedule": crontab(minute=0),
+    },
 }
 
 

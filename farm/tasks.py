@@ -162,3 +162,17 @@ def auto_log_water_temperature():
             count += 1
 
     return f"Auto logged water temp {water_temp}°C for {count} ponds"
+
+@shared_task
+def run_predictive_alerts_task():
+    """
+    Hourly Celery task — runs predictive alert checks for all users.
+    Analyzes temperature trends, DO trends, and mortality patterns.
+    """
+    from .services.predictive_alerts import run_predictive_alerts
+ 
+    try:
+        count = run_predictive_alerts(user=None)   # None = all users
+        return f"Predictive alerts: {count} new alerts created"
+    except Exception as e:
+        return f"Predictive alerts task failed: {e}"

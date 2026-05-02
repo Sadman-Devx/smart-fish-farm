@@ -454,3 +454,130 @@ class FarmProfile(models.Model):
         """Comma-separated list of species labels."""
         label_map = dict(FarmProfile.SPECIES_CHOICES)
         return ", ".join(label_map.get(s, s) for s in (self.species or []))
+
+
+"""
+farm/models.py এর একদম শেষে এই দুটো model যোগ করো।
+────────────────────────────────────────────────────
+"""
+
+# ── PerformanceLog ────────────────────────────────────────────────────────────
+
+class PerformanceLog(models.Model):
+    """
+    Stores per-request performance metrics collected by @benchmark_view decorator.
+    Used to generate response time graphs and DB query analysis for the paper.
+    """
+    endpoint         = models.CharField(max_length=100, db_index=True,
+                           help_text="View function name")
+    method           = models.CharField(max_length=10, default="GET")
+    elapsed_ms       = models.FloatField(help_text="Total response time (ms)")
+    memory_before_mb = models.FloatField(default=0.0)
+    memory_after_mb  = models.FloatField(default=0.0)
+    db_query_count   = models.IntegerField(default=0)
+    db_query_time_ms = models.FloatField(default=0.0)
+    success          = models.BooleanField(default=True)
+    error            = models.TextField(blank=True)
+    created_at       = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering    = ["-created_at"]
+        verbose_name = "Performance Log"
+
+    def __str__(self):
+        return f"{self.endpoint} — {self.elapsed_ms:.1f}ms ({self.created_at:%Y-%m-%d %H:%M})"
+
+    @property
+    def memory_delta_mb(self):
+        return round(self.memory_after_mb - self.memory_before_mb, 2)
+
+
+# ── BenchmarkRun ──────────────────────────────────────────────────────────────
+
+class BenchmarkRun(models.Model):
+    """
+    Stores aggregated results from a full benchmark suite run.
+    Each row = one call to run_full_benchmark().
+    """
+    suite_name          = models.CharField(max_length=200)
+    started_at          = models.CharField(max_length=40)
+    finished_at         = models.CharField(max_length=40)
+    total_operations    = models.IntegerField(default=0)
+    aggregated_results  = models.JSONField(default=dict,
+                              help_text="Per-operation aggregated stats")
+    system_info         = models.JSONField(default=dict)
+    summary             = models.JSONField(default=dict)
+    created_at          = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering    = ["-created_at"]
+        verbose_name = "Benchmark Run"
+
+    def __str__(self):
+        return f"{self.suite_name} — {self.created_at:%Y-%m-%d %H:%M}"
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# INSTRUCTION: farm/models.py এর একদম শেষে এই দুটো class যোগ করো
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+class DiseaseLog(models.Model):
+    """Fish Doctor এ detected disease গুলো store করে।"""
+
+    SEVERITY_CHOICES = [
+        ("low",      "Low"),
+        ("medium",   "Medium"),
+        ("critical", "Critical"),
+    ]
+
+    user       = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="disease_logs",
+    )
+    pond       = models.ForeignKey(
+        Pond,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="disease_logs",
+        help_text="Optional — which pond this disease was detected in",
+    )
+    disease_name  = models.CharField(max_length=200)
+    species       = models.CharField(max_length=100, default="General")
+    severity      = models.CharField(max_length=10, choices=SEVERITY_CHOICES, default="low")
+    ai_response   = models.TextField(help_text="Full AI diagnosis text")
+    detected_at   = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-detected_at"]
+
+    def __str__(self):
+        return f"{self.disease_name} ({self.severity}) — {self.detected_at:%Y-%m-%d}"
+
+
+class DiseaseAlert(models.Model):
+    """একই রোগ বারবার হলে auto alert তৈরি করে।"""
+
+    user         = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="disease_alerts",
+    )
+    disease_name = models.CharField(max_length=200)
+    pond         = models.ForeignKey(
+        Pond,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="disease_alerts",
+    )
+    occurrence_count = models.PositiveIntegerField(default=1)
+    last_seen        = models.DateTimeField(auto_now=True)
+    resolved         = models.BooleanField(default=False)
+    created_at       = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering  = ["-last_seen"]
+        # one alert per disease per user (not per pond — farm-wide)
+        unique_together = ("user", "disease_name")
+
+    def __str__(self):
+        return f"Alert: {self.disease_name} × {self.occurrence_count}"

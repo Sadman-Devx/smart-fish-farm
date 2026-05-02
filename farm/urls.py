@@ -5,9 +5,10 @@ Full URL config for the farm app — includes the new onboarding routes.
 """
 from django.urls import path
 
-from ai_agent_views import fish_disease_agent, fish_disease_chat
+from .ai_agent_views import fish_disease_agent, fish_disease_chat
 from . import views
 from . import onboarding_views
+from .ai_agent_views import disease_stats_api, disease_log_api, resolve_disease_alert,fish_disease_chat_stream
 
 app_name = "farm"
 
@@ -61,6 +62,18 @@ urlpatterns = [
     path("weather/refresh/",          views.refresh_weather_view, name="refresh_weather"),
     path("feeding/done/",             views.mark_feeding_done_view, name="mark_feeding_done"),
 
-    path("fish-doctor/", fish_disease_agent, name="fish_doctor"),
-    path("fish-doctor/chat/", fish_disease_chat, name="fish_doctor_chat"),
+    path("fish-doctor/",                          fish_disease_agent,     name="fish_doctor"),
+    path("fish-doctor/chat/",                     fish_disease_chat,      name="fish_doctor_chat"),
+    path("fish-doctor/stats/",                    disease_stats_api,      name="disease_stats"),
+    path("fish-doctor/logs/",                     disease_log_api,        name="disease_logs"),
+    path("fish-doctor/alerts/<int:pk>/resolve/",  resolve_disease_alert,  name="resolve_disease_alert"),
+    path("fish-doctor/chat/stream/",              fish_disease_chat_stream, name="fish_doctor_chat_stream"),
+
+    # ── Benchmark ───────────────────────────────────────────────────────
+    path("benchmark/",         views.benchmark_dashboard,   name="benchmark_dashboard"),
+    path("benchmark/run/",     views.run_benchmark_view,    name="run_benchmark"),
+    path("benchmark/export/",  views.benchmark_export_json, name="benchmark_export"),
+
+    path("analytics/",              views.analytics_dashboard, name="analytics_dashboard"),
+    path("analytics/fcr/<int:pk>/", views.fcr_batch_detail,    name="fcr_batch_detail"),
 ]

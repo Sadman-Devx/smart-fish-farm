@@ -1,4 +1,5 @@
 from django.contrib import admin
+from .models import PerformanceLog, BenchmarkRun
 from .models import (
     Pond, FishBatch, GrowthRecord, WeatherRecord, DailyWeather,
     FeedingProfile, FeedLog, FeedingReminder, SensorReading,
@@ -136,3 +137,24 @@ class FarmProfileAdmin(admin.ModelAdmin):
             "classes": ("collapse",),
         }),
     )
+
+@admin.register(PerformanceLog)
+class PerformanceLogAdmin(admin.ModelAdmin):
+    list_display  = ("endpoint", "method", "elapsed_ms", "db_query_count",
+                     "memory_after_mb", "success", "created_at")
+    list_filter   = ("endpoint", "method", "success")
+    ordering      = ("-created_at",)
+    readonly_fields = ("created_at",)
+ 
+    def has_add_permission(self, request):
+        return False   # logs are auto-generated only
+ 
+ 
+@admin.register(BenchmarkRun)
+class BenchmarkRunAdmin(admin.ModelAdmin):
+    list_display  = ("suite_name", "total_operations", "created_at")
+    ordering      = ("-created_at",)
+    readonly_fields = ("created_at", "aggregated_results", "system_info", "summary")
+ 
+    def has_add_permission(self, request):
+        return False

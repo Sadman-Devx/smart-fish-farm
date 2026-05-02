@@ -288,6 +288,166 @@
 
 </div>
 
+{# ── ML-Based Growth Prediction (merged) ────────────────── #}
+
+{% if ml_prediction %}
+<div class="card" style="margin-top:16px;border-color:rgba(168,85,247,.3)">
+  <div class="card-header" style="border-color:rgba(168,85,247,.2)">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font-size:18px">🤖</span>
+      <span class="card-title">ML-Based Growth Prediction</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="pill" style="background:rgba(168,85,247,.15);color:#a855f7">
+        {{ ml_prediction.model_used }}
+      </span>
+      {% if ml_prediction.fallback %}
+        <span class="badge badge-warn">Fallback Mode</span>
+      {% else %}
+        <span class="badge badge-success">ML Active</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card-body">
+
+    {# ── Model Performance Metrics ── #}
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+
+      <div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center;
+                  border:1px solid rgba(168,85,247,.15)">
+        <div class="fs-xs text-muted" style="margin-bottom:4px">R² Score</div>
+        <div style="font-family:'Poppins', sans-serif;font-size:20px;font-weight:800;
+                    color:{% if ml_prediction.r2_score >= 0.8 %}var(--success)
+                          {% elif ml_prediction.r2_score >= 0.6 %}var(--warn)
+                          {% else %}var(--danger){% endif %}">
+          {{ ml_prediction.r2_score|floatformat:3 }}
+        </div>
+        <div class="fs-xs text-muted">Model fit</div>
+      </div>
+
+      <div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center;
+                  border:1px solid rgba(168,85,247,.15)">
+        <div class="fs-xs text-muted" style="margin-bottom:4px">Confidence</div>
+        <div style="font-family:'Poppins', sans-serif;font-size:20px;font-weight:800;
+                    color:{% if ml_prediction.confidence_score >= 0.7 %}var(--accent)
+                          {% elif ml_prediction.confidence_score >= 0.5 %}var(--warn)
+                          {% else %}var(--muted){% endif %}">
+          {{ ml_prediction.confidence_score|floatformat:0|add:"0" }}%
+        </div>
+        <div class="fs-xs text-muted">Prediction confidence</div>
+      </div>
+
+      <div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center;
+                  border:1px solid rgba(168,85,247,.15)">
+        <div class="fs-xs text-muted" style="margin-bottom:4px">Training Data</div>
+        <div style="font-family:'Poppins', sans-serif;font-size:20px;font-weight:800;color:#a855f7">
+          {{ ml_prediction.training_samples_real }}
+        </div>
+        <div class="fs-xs text-muted">Real samples</div>
+      </div>
+
+    </div>
+
+    {# ── Prediction Results ── #}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+
+      <div style="background:var(--surface2);border-radius:8px;padding:12px">
+        <div class="fs-xs text-muted" style="margin-bottom:4px">Predicted Next Weight</div>
+        <div style="font-family:'Poppins', sans-serif;font-size:22px;font-weight:800;color:#a855f7">
+          {{ ml_prediction.predicted_weight_g|floatformat:1 }}g
+        </div>
+        <div class="fs-xs text-muted">
+          from {{ ml_prediction.current_avg_weight_g|floatformat:1 }}g current
+        </div>
+      </div>
+
+      <div style="background:var(--surface2);border-radius:8px;padding:12px">
+        <div class="fs-xs text-muted" style="margin-bottom:4px">Daily Growth Rate</div>
+        <div style="font-family:'Poppins', sans-serif;font-size:22px;font-weight:800;color:var(--accent)">
+          {{ ml_prediction.predicted_daily_gain_g|floatformat:2 }}g/day
+        </div>
+        <div class="fs-xs text-muted">AI estimated rate</div>
+      </div>
+
+      <div style="background:var(--surface2);border-radius:8px;padding:12px">
+        <div class="fs-xs text-muted" style="margin-bottom:4px">Days to Market</div>
+        <div style="font-family:''Poppins', sans-serif;font-size:22px;font-weight:800;
+                    color:{% if ml_prediction.days_to_market <= 14 %}var(--warn){% else %}var(--accent2){% endif %}">
+          {{ ml_prediction.days_to_market }} days
+        </div>
+        <div class="fs-xs text-muted">Est. {{ ml_prediction.estimated_harvest_date }}</div>
+      </div>
+
+      <div style="background:var(--surface2);border-radius:8px;padding:12px">
+        <div class="fs-xs text-muted" style="margin-bottom:4px">Market Target</div>
+        <div style="font-family:''Poppins', sans-serif;font-size:22px;font-weight:800;color:var(--success)">
+          {{ ml_prediction.target_market_weight_g|floatformat:0 }}g
+        </div>
+        <div class="fs-xs text-muted">Target harvest weight</div>
+      </div>
+
+    </div>
+
+    {# ── Feature Importance Bar Chart ── #}
+    {% if ml_prediction.feature_importance %}
+    <div style="margin-bottom:16px">
+      <div class="fs-xs text-muted" style="margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em">
+        Feature Importance (what affects prediction most)
+      </div>
+      {% for feature, importance in ml_prediction.feature_importance.items %}
+      {% if importance > 0.01 %}
+      <div style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+          <span class="fs-xs" style="color:var(--text)">{{ feature|title|cut:"_" }}</span>
+          <span class="fs-xs" style="color:#a855f7;font-weight:600">
+            {{ importance|floatformat:1 }}%
+          </span>
+        </div>
+        <div style="height:5px;background:var(--surface3);border-radius:3px;overflow:hidden">
+          <div style="height:100%;border-radius:3px;
+                      background:linear-gradient(90deg,#a855f7,var(--accent2));
+                      width:{{ importance|floatformat:0 }}%">
+          </div>
+        </div>
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {# ── Input Features Used ── #}
+    <div style="background:var(--surface2);border-radius:8px;padding:12px">
+      <div class="fs-xs text-muted" style="margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">
+        Input Features Used
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        {% for key, val in ml_prediction.features_used.items %}
+        <div style="display:flex;justify-content:space-between;padding:4px 0;
+                    border-bottom:1px solid var(--border)">
+          <span class="fs-xs text-muted">{{ key|title|cut:"_" }}</span>
+          <span class="fs-xs fw-bold">{{ val }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    {# ── Synthetic data note ── #}
+    {% if ml_prediction.training_samples_real < 10 %}
+    <div style="margin-top:12px;padding:10px 12px;background:rgba(245,158,11,.06);
+                border:1px solid rgba(245,158,11,.2);border-radius:8px">
+      <div class="fs-xs" style="color:var(--warn)">
+        ⚠ Model trained on synthetic data ({{ ml_prediction.training_samples_synthetic }} samples).
+        Add more growth records to improve real-data accuracy.
+        Currently {{ ml_prediction.training_samples_real }} real samples in database.
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endif %}
+
 {# ── Growth records table + Feed history ─────────────────── #}
 <div class="row-2">
   <div class="card">
@@ -359,7 +519,7 @@
   </div>
 </div>
 
-{# ── NEW: Mortality Logs + Harvest Records ─────────────────── #}
+{# ── Mortality Logs + Harvest Records ─────────────────── #}
 <div class="row-2">
   <div class="card">
     <div class="card-header">
@@ -518,4 +678,4 @@ var growthCounts  = safeJson('growth-count-values');
   });
 })();
 </script>
-{% endblock %}
+{% endblock %}  

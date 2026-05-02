@@ -1,0 +1,473 @@
+{% extends "base.html" %}
+{% block title %}Performance Benchmarking{% endblock %}
+{% block topbar_title %}Performance Benchmarking{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{% url 'farm:dashboard' %}" class="btn btn-sm">← Dashboard</a>
+  <a href="{% url 'farm:benchmark_export' %}" class="btn btn-sm">⬇ Export JSON</a>
+  <form method="post" action="{% url 'farm:run_benchmark' %}" style="display:inline;margin:0">
+    {% csrf_token %}
+    <input type="hidden" name="iterations" value="10">
+    <button type="submit" class="btn btn-accent btn-sm">▶ Run Benchmark (×10)</button>
+  </form>
+{% endblock %}
+
+{% block content %}
+<div class="page-header mb-16">
+  <div>
+    <h1>⚡ Performance Benchmarking</h1>
+    <p>System performance metrics for research paper evaluation — response times, DB queries, memory usage</p>
+  </div>
+</div>
+
+{% if stats.no_data %}
+{# ── No data yet ── #}
+<div class="card">
+  <div class="card-body" style="text-align:center;padding:60px 20px">
+    <div style="font-size:48px;margin-bottom:16px">📊</div>
+    <h2 style="margin-bottom:8px">No benchmark data yet</h2>
+    <p class="text-muted fs-sm" style="margin-bottom:24px">
+      Run the benchmark suite to collect performance metrics.<br>
+      This data will be used in your research paper's evaluation section.
+    </p>
+    <form method="post" action="{% url 'farm:run_benchmark' %}" style="display:inline">
+      {% csrf_token %}
+      <input type="hidden" name="iterations" value="10">
+      <button type="submit" class="btn btn-accent">▶ Run First Benchmark</button>
+    </form>
+  </div>
+</div>
+{% else %}
+
+{# ── System Info ── #}
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header">
+    <span class="card-title">🖥 Experimental Setup (for paper)</span>
+    <span class="pill pill-info">System Info</span>
+  </div>
+  <div class="card-body">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+      <div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center">
+        <div class="fs-xs text-muted" style="margin-bottom:4px">CPU Cores</div>
+        <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--accent2)">
+          {{ stats.system_info.cpu_cores_logical|default:"—" }}
+        </div>
+        <div class="fs-xs text-muted">logical</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center">
+        <div class="fs-xs text-muted" style="margin-bottom:4px">Total RAM</div>
+        <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--accent)">
+          {{ stats.system_info.total_ram_gb|default:"—" }} GB
+        </div>
+        <div class="fs-xs text-muted">system memory</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center">
+        <div class="fs-xs text-muted" style="margin-bottom:4px">Process Memory</div>
+        <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:#a855f7">
+          {{ stats.system_info.python_process_mb|default:"—" }} MB
+        </div>
+        <div class="fs-xs text-muted">Django process</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center">
+        <div class="fs-xs text-muted" style="margin-bottom:4px">RAM Usage</div>
+        <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;
+                    color:{% if stats.system_info.ram_usage_pct > 80 %}var(--danger){% else %}var(--success){% endif %}">
+          {{ stats.system_info.ram_usage_pct|default:"—" }}%
+        </div>
+        <div class="fs-xs text-muted">current usage</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── Overall KPIs ── #}
+<div class="kpi-grid" style="margin-bottom:16px">
+  <div class="kpi-card k-teal">
+    <div class="kpi-label">Total Requests Logged</div>
+    <div class="kpi-value">{{ stats.overall.total_requests_logged }}</div>
+    <div class="kpi-meta">All endpoints</div>
+  </div>
+  <div class="kpi-card k-blue">
+    <div class="kpi-label">Avg Response Time</div>
+    <div class="kpi-value">{{ stats.overall.overall_avg_ms }} <small>ms</small></div>
+    <div class="kpi-meta">All operations</div>
+  </div>
+  <div class="kpi-card k-orange">
+    <div class="kpi-label">P95 Response Time</div>
+    <div class="kpi-value">{{ stats.overall.overall_p95_ms }} <small>ms</small></div>
+    <div class="kpi-meta">95th percentile</div>
+  </div>
+  <div class="kpi-card k-purple">
+    <div class="kpi-label">P99 Response Time</div>
+    <div class="kpi-value">{{ stats.overall.overall_p99_ms }} <small>ms</small></div>
+    <div class="kpi-meta">99th percentile</div>
+  </div>
+</div>
+
+{# ── Per-Endpoint Stats Table (paper Table) ── #}
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header">
+    <span class="card-title">📋 Per-Endpoint Performance (Research Paper Table)</span>
+    <span class="pill pill-accent">{{ stats.endpoint_stats|length }} endpoints</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Endpoint / Operation</th>
+          <th class="text-end">Requests</th>
+          <th class="text-end">Avg (ms)</th>
+          <th class="text-end">Min (ms)</th>
+          <th class="text-end">Max (ms)</th>
+          <th class="text-end">Avg DB Queries</th>
+          <th class="text-end">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ep in stats.endpoint_stats %}
+        <tr>
+          <td class="fw-bold">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:12px">
+              {{ ep.endpoint }}
+            </span>
+          </td>
+          <td class="text-end">{{ ep.count }}</td>
+          <td class="text-end fw-bold"
+              style="color:{% if ep.avg_ms < 100 %}var(--success)
+                           {% elif ep.avg_ms < 500 %}var(--warn)
+                           {% else %}var(--danger){% endif %}">
+            {{ ep.avg_ms|floatformat:1 }}
+          </td>
+          <td class="text-end text-muted">{{ ep.min_ms|floatformat:1 }}</td>
+          <td class="text-end text-muted">{{ ep.max_ms|floatformat:1 }}</td>
+          <td class="text-end">
+            <span class="badge {% if ep.avg_db_queries < 5 %}badge-success{% elif ep.avg_db_queries < 15 %}badge-warn{% else %}badge-danger{% endif %}">
+              {{ ep.avg_db_queries|floatformat:1 }}
+            </span>
+          </td>
+          <td class="text-end">
+            {% if ep.avg_ms < 200 %}
+              <span class="badge badge-success">✓ Fast</span>
+            {% elif ep.avg_ms < 1000 %}
+              <span class="badge badge-warn">⚡ OK</span>
+            {% else %}
+              <span class="badge badge-danger">⚠ Slow</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-muted fs-sm" style="text-align:center;padding:24px">
+          No endpoint data yet — run the benchmark first.
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ── Charts Row ── #}
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+
+  {# Response Time Chart #}
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Response Time Distribution</span>
+      <span class="pill pill-info">Last 100 logs</span>
+    </div>
+    <div class="card-body">
+      <canvas id="responseTimeChart" height="220"></canvas>
+    </div>
+  </div>
+
+  {# DB Queries Chart #}
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">DB Queries per Endpoint</span>
+      <span class="pill pill-warn">Query count</span>
+    </div>
+    <div class="card-body">
+      <canvas id="dbQueryChart" height="220"></canvas>
+    </div>
+  </div>
+
+</div>
+
+{# ── Memory Usage Chart ── #}
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header">
+    <span class="card-title">Memory Usage Over Time</span>
+    <span class="pill pill-accent">RSS Memory (MB)</span>
+  </div>
+  <div class="card-body">
+    <canvas id="memoryChart" height="160"></canvas>
+  </div>
+</div>
+
+{# ── Recent Benchmark Runs ── #}
+{% if recent_runs %}
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header">
+    <span class="card-title">Recent Benchmark Runs</span>
+    <span class="badge badge-secondary">{{ recent_runs|length }} runs</span>
+  </div>
+  <div style="padding:12px 16px;display:flex;flex-direction:column;gap:12px">
+    {% for run in recent_runs %}
+    <div style="background:var(--surface2);border-radius:10px;padding:14px 16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div>
+          <div class="fs-sm fw-bold">{{ run.suite_name }}</div>
+          <div class="fs-xs text-muted">{{ run.created_at|date:"M d, Y · H:i" }}</div>
+        </div>
+        <span class="badge badge-info">{{ run.total_operations }} ops</span>
+      </div>
+
+      {# Per-operation breakdown #}
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px">
+        {% for op_name, op_data in run.aggregated_results.items %}
+        <div style="background:var(--surface3);border-radius:8px;padding:10px 12px">
+          <div class="fs-xs text-muted" style="margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">
+            {{ op_name|title }}
+          </div>
+          <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800;
+                      color:{% if op_data.avg_ms < 100 %}var(--success)
+                             {% elif op_data.avg_ms < 500 %}var(--warn)
+                             {% else %}var(--danger){% endif %}">
+            {{ op_data.avg_ms }} ms
+          </div>
+          <div class="fs-xs text-muted">
+            min {{ op_data.min_ms }}ms · max {{ op_data.max_ms }}ms
+          </div>
+          <div class="fs-xs text-muted">
+            p95: {{ op_data.p95_ms }}ms · σ {{ op_data.std_dev }}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      {# Summary row #}
+      {% if run.summary %}
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);
+                  display:flex;gap:20px;flex-wrap:wrap">
+        <span class="fs-xs text-muted">
+          Avg: <strong style="color:var(--accent)">{{ run.summary.avg_response_ms }}ms</strong>
+        </span>
+        <span class="fs-xs text-muted">
+          P95: <strong style="color:var(--warn)">{{ run.summary.p95_response_ms }}ms</strong>
+        </span>
+        <span class="fs-xs text-muted">
+          P99: <strong style="color:var(--danger)">{{ run.summary.p99_response_ms }}ms</strong>
+        </span>
+        <span class="fs-xs text-muted">
+          Success: <strong style="color:var(--success)">{{ run.summary.successful }}/{{ run.summary.total_operations }}</strong>
+        </span>
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{# ── Raw Log Table ── #}
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Raw Performance Logs (Last 100)</span>
+    <a href="{% url 'farm:benchmark_export' %}" class="btn btn-sm btn-outline">⬇ Export JSON</a>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Endpoint</th>
+          <th>Method</th>
+          <th class="text-end">Time (ms)</th>
+          <th class="text-end">DB Queries</th>
+          <th class="text-end">Memory Δ</th>
+          <th class="text-end">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in recent_logs %}
+        <tr>
+          <td class="fs-xs text-muted" style="white-space:nowrap">
+            {{ log.created_at|date:"M d · H:i:s" }}
+          </td>
+          <td style="font-family:'JetBrains Mono',monospace;font-size:11px">
+            {{ log.endpoint }}
+          </td>
+          <td>
+            <span class="badge {% if log.method == 'GET' %}badge-info{% else %}badge-warn{% endif %}">
+              {{ log.method }}
+            </span>
+          </td>
+          <td class="text-end fw-bold"
+              style="color:{% if log.elapsed_ms < 100 %}var(--success)
+                           {% elif log.elapsed_ms < 500 %}var(--warn)
+                           {% else %}var(--danger){% endif %}">
+            {{ log.elapsed_ms|floatformat:1 }}
+          </td>
+          <td class="text-end">
+            <span class="badge {% if log.db_query_count < 10 %}badge-success{% elif log.db_query_count < 20 %}badge-warn{% else %}badge-danger{% endif %}">
+              {{ log.db_query_count }}
+            </span>
+          </td>
+          <td class="text-end fs-xs text-muted">
+            {% if log.memory_after_mb > log.memory_before_mb %}
+              +{{ log.memory_after_mb|add:"-"|add:log.memory_before_mb|floatformat:1 }} MB
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-end">
+            {% if log.success %}
+              <span class="badge badge-success">✓</span>
+            {% else %}
+              <span class="badge badge-danger">✕</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" class="text-muted fs-sm" style="text-align:center;padding:24px">
+            No logs yet. Run some benchmark operations first.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endif %}{# end stats.no_data #}
+
+{# JSON data for charts #}
+{{ stats.endpoint_stats|json_script:"endpoint-stats" }}
+{% for log in recent_logs %}{% endfor %}
+<script id="log-times" type="application/json">
+[{% for log in recent_logs %}{"t":"{{ log.created_at|date:'H:i:s' }}","ms":{{ log.elapsed_ms|floatformat:1 }},"mem":{{ log.memory_after_mb|floatformat:1 }}}{% if not forloop.last %},{% endif %}{% endfor %}]
+</script>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+Chart.defaults.color       = '#7a95b8';
+Chart.defaults.borderColor = '#1f3356';
+Chart.defaults.font.family = "'Space Grotesk', system-ui, sans-serif";
+
+function safeJson(id) {
+  try { return JSON.parse(document.getElementById(id).textContent); } catch(e) { return []; }
+}
+
+var epStats = safeJson('endpoint-stats');
+var logData = safeJson('log-times');
+
+// ── 1. Response Time line chart ────────────────────────────────────────────
+(function(){
+  var ctx = document.getElementById('responseTimeChart');
+  if (!ctx || !logData.length) return;
+  var labels = logData.map(function(d){ return d.t; });
+  var times  = logData.map(function(d){ return d.ms; });
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Response Time (ms)',
+        data: times,
+        borderColor: '#00e5b4',
+        backgroundColor: 'rgba(0,229,180,.08)',
+        tension: 0.3,
+        fill: true,
+        pointRadius: 2,
+        pointHoverRadius: 5,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#111e35', borderColor: '#1f3356', borderWidth: 1,
+          callbacks: { label: function(c){ return c.parsed.y.toFixed(1) + ' ms'; } }
+        }
+      },
+      scales: {
+        y: { grid: { color: '#1f3356' }, ticks: { callback: function(v){ return v + 'ms'; } } },
+        x: { ticks: { maxTicksLimit: 8, maxRotation: 0 }, grid: { display: false } }
+      }
+    }
+  });
+})();
+
+// ── 2. DB Queries bar chart ────────────────────────────────────────────────
+(function(){
+  var ctx = document.getElementById('dbQueryChart');
+  if (!ctx || !epStats.length) return;
+  var labels = epStats.map(function(e){ return e.endpoint; });
+  var values = epStats.map(function(e){ return parseFloat(e.avg_db_queries) || 0; });
+  var colors = values.map(function(v){
+    return v < 5 ? 'rgba(16,185,129,.7)' : v < 15 ? 'rgba(245,158,11,.7)' : 'rgba(239,68,68,.7)';
+  });
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Avg DB Queries',
+        data: values,
+        backgroundColor: colors,
+        borderRadius: 5,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { grid: { color: '#1f3356' }, beginAtZero: true },
+        x: { ticks: { maxRotation: 30, font: { size: 10 } }, grid: { display: false } }
+      }
+    }
+  });
+})();
+
+// ── 3. Memory usage line chart ─────────────────────────────────────────────
+(function(){
+  var ctx = document.getElementById('memoryChart');
+  if (!ctx || !logData.length) return;
+  var labels = logData.map(function(d){ return d.t; });
+  var mems   = logData.map(function(d){ return d.mem; });
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Memory (MB)',
+        data: mems,
+        borderColor: '#a855f7',
+        backgroundColor: 'rgba(168,85,247,.08)',
+        tension: 0.35,
+        fill: true,
+        pointRadius: 2,
+        pointHoverRadius: 5,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#111e35', borderColor: '#1f3356', borderWidth: 1,
+          callbacks: { label: function(c){ return c.parsed.y.toFixed(1) + ' MB'; } }
+        }
+      },
+      scales: {
+        y: { grid: { color: '#1f3356' }, ticks: { callback: function(v){ return v + ' MB'; } } },
+        x: { ticks: { maxTicksLimit: 8, maxRotation: 0 }, grid: { display: false } }
+      }
+    }
+  });
+})();
+</script>
+{% endblock %}

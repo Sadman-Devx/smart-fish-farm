@@ -49,6 +49,9 @@ from django.contrib.auth.decorators import login_required
 import google.genai as genai
 from google.genai import types
 from .services.weather_ingest import get_weather_for_location, get_feeding_suggestion
+from .services.predictive_alerts import run_predictive_alerts, get_temperature_trend_data
+from .services.fcr_analytics import get_feed_efficiency_ranking, get_fcr_history, calculate_batch_fcr
+from .services.water_heatmap import build_water_quality_heatmap
 
 from .models import (
     FeedLog, FeedingProfile, FeedingReminder, FishBatch,
@@ -62,8 +65,18 @@ from .services import (
     projected_avg_weight_g,
     projected_weight_gain_kg,
     smart_feed_kg_for_batch,
+    ml_predict_batch_growth,
+)
+from .services.benchmarking import (
+    run_full_benchmark, get_benchmark_stats_for_paper, benchmark_view,
 )
 from .tasks import send_daily_feed_alert
+
+from django.contrib.admin.views.decorators import staff_member_required
+from .services.benchmarking import (
+    run_full_benchmark,
+    get_benchmark_stats_for_paper,
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -543,12 +556,24 @@ def pond_detail(request, pk):
 # Batch detail — PUBLIC (read-only) — FEATURE 1: Enhanced with growth charts
 # ─────────────────────────────────────────────────────────────────────────────
 
+"""
+batch_detail view — updated to use ML prediction alongside formula prediction.
+
+Replace the existing batch_detail() function in farm/views.py with this one.
+Also add this import at the top of views.py:
+
+    from .services import ml_predict_batch_growth
+"""
+
 def batch_detail(request, pk):
+    from .services import ml_predict_batch_growth   # ML import
+
     is_guest = not request.user.is_authenticated
     if is_guest:
         batch = get_object_or_404(FishBatch, pk=pk)
     else:
         batch = get_object_or_404(FishBatch, pk=pk, pond__owner=request.user)
+
     growth_records = batch.growth_records.all()
     feed_logs      = batch.feed_logs.all()
     latest_weather = WeatherRecord.objects.filter(pond=batch.pond).order_by("-timestamp").first()
@@ -561,19 +586,26 @@ def batch_detail(request, pk):
     if auto_feed_kg is not None:
         projected_gain_kg           = projected_weight_gain_kg(auto_feed_kg, assumed_fcr)
         projected_next_avg_weight_g = projected_avg_weight_g(batch, auto_feed_kg, assumed_fcr)
+
+    # ── Formula-based prediction (original) ───────────────────────────────────
     ai_prediction = predict_batch_growth(batch, feed_kg=auto_feed_kg)
+
+    # ── ML-based prediction (new) ─────────────────────────────────────────────
+    try:
+        ml_prediction = ml_predict_batch_growth(batch)
+    except Exception:
+        ml_prediction = None
 
     mortality_logs  = batch.mortality_logs.all()[:10]
     total_mortality = batch.mortality_logs.aggregate(total=Sum("count"))["total"] or 0
     harvests        = batch.harvests.all()
 
-    # ── Growth chart data (Feature 1) ─────────────────────────────────────────
+    # ── Growth chart data ──────────────────────────────────────────────────────
     growth_list = list(growth_records.order_by("date"))
     growth_labels        = [str(r.date) for r in growth_list]
     growth_weight_values = [float(r.avg_weight_g) for r in growth_list]
     growth_count_values  = [r.surviving_count for r in growth_list]
 
-    # Growth summary stats
     first_record    = growth_list[0] if growth_list else None
     latest_record   = growth_list[-1] if growth_list else None
     starting_weight = float(first_record.avg_weight_g) if first_record else float(batch.initial_avg_weight_g)
@@ -598,35 +630,100 @@ def batch_detail(request, pk):
         form = forms.FeedLogForm(batch=batch, initial_amount_kg=auto_feed_kg) if not is_guest else None
 
     return render(request, "farm/batch_detail.html", {
-        "is_guest": is_guest,
-        "batch": batch,
-        "growth_records": growth_records,
-        "feed_logs": feed_logs,
-        "latest_weather": latest_weather,
-        "auto_feed_kg": auto_feed_kg,
-        "assumed_fcr": assumed_fcr,
-        "projected_gain_kg": projected_gain_kg,
+        "is_guest":                  is_guest,
+        "batch":                     batch,
+        "growth_records":            growth_records,
+        "feed_logs":                 feed_logs,
+        "latest_weather":            latest_weather,
+        "auto_feed_kg":              auto_feed_kg,
+        "assumed_fcr":               assumed_fcr,
+        "projected_gain_kg":         projected_gain_kg,
         "projected_next_avg_weight_g": projected_next_avg_weight_g,
-        "ai_prediction": ai_prediction,
-        "today_feed_log": today_feed_log,
-        "feed_form": form,
-        "mortality_logs": mortality_logs,
-        "total_mortality": total_mortality,
-        "harvests": harvests,
-        # Growth chart data
-        "growth_labels": growth_labels,
-        "growth_weight_values": growth_weight_values,
-        "growth_count_values": growth_count_values,
-        # Growth summary stats
-        "starting_weight": starting_weight,
-        "current_weight": current_weight,
-        "weight_gain_g": weight_gain_g,
-        "weight_gain_pct": weight_gain_pct,
-        "survival_rate": survival_rate,
-        "current_count": current_count,
+        "ai_prediction":             ai_prediction,
+        "ml_prediction":             ml_prediction,       # ← নতুন
+        "today_feed_log":            today_feed_log,
+        "feed_form":                 form,
+        "mortality_logs":            mortality_logs,
+        "total_mortality":           total_mortality,
+        "harvests":                  harvests,
+        "growth_labels":             growth_labels,
+        "growth_weight_values":      growth_weight_values,
+        "growth_count_values":       growth_count_values,
+        "starting_weight":           starting_weight,
+        "current_weight":            current_weight,
+        "weight_gain_g":             weight_gain_g,
+        "weight_gain_pct":           weight_gain_pct,
+        "survival_rate":             survival_rate,
+        "current_count":             current_count,
     })
 
-
+# ── Benchmark Dashboard ───────────────────────────────────────────────────────
+@login_required
+def benchmark_dashboard(request):
+    """
+    Performance benchmarking dashboard for research paper data collection.
+    Shows response times, DB query counts, memory usage, and ML timing.
+    """
+    from .services.benchmarking import get_benchmark_stats_for_paper
+ 
+    stats = get_benchmark_stats_for_paper()
+ 
+    # Recent performance logs (last 100)
+    from .models import PerformanceLog, BenchmarkRun
+    recent_logs  = PerformanceLog.objects.order_by("-created_at")[:100]
+    recent_runs  = BenchmarkRun.objects.order_by("-created_at")[:5]
+ 
+    return render(request, "farm/benchmark_dashboard.html", {
+        "stats":       stats,
+        "recent_logs": recent_logs,
+        "recent_runs": recent_runs,
+        "page_title":  "Performance Benchmarking",
+    })
+ 
+ 
+@require_POST
+@login_required
+def run_benchmark_view(request):
+    """
+    Trigger a full benchmark suite run.
+    POST /benchmark/run/
+    """
+    from .services.benchmarking import run_full_benchmark
+ 
+    try:
+        n_iter = int(request.POST.get("iterations", 10))
+        n_iter = max(3, min(n_iter, 50))   # clamp 3–50
+ 
+        suite  = run_full_benchmark(n_iterations=n_iter)
+        messages.success(
+            request,
+            f"✅ Benchmark complete — {len(suite.results)} operations measured. "
+            f"Avg response: {suite.summary.get('avg_response_ms', 0):.1f}ms"
+        )
+    except Exception as e:
+        messages.error(request, f"Benchmark failed: {e}")
+ 
+    return redirect("farm:benchmark_dashboard")
+ 
+ 
+@login_required
+def benchmark_export_json(request):
+    """Export all benchmark data as JSON for paper analysis."""
+    import json
+    from django.http import JsonResponse
+    from .models import PerformanceLog, BenchmarkRun
+ 
+    logs = list(PerformanceLog.objects.values())
+    runs = list(BenchmarkRun.objects.values())
+ 
+    data = {
+        "performance_logs": logs,
+        "benchmark_runs":   runs,
+        "exported_at":      timezone.now().isoformat(),
+    }
+    response = JsonResponse(data, safe=False, json_dumps_params={"indent": 2})
+    response["Content-Disposition"] = 'attachment; filename="aquasmart_benchmark.json"'
+    return response
 # ─────────────────────────────────────────────────────────────────────────────
 # Read-only report views — PUBLIC
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1114,3 +1211,207 @@ def mark_feeding_done_view(request):
             reminder.save()
             messages.success(request, "Feeding marked as done!")
     return redirect("farm:dashboard")
+
+@staff_member_required
+def benchmark_dashboard(request):
+    """
+    Performance benchmarking dashboard.
+    শুধু Django superuser / staff দেখতে পারবে।
+    Regular user চেষ্টা করলে → admin login page এ redirect হবে।
+    """
+    from .services.benchmarking import get_benchmark_stats_for_paper
+    from .models import PerformanceLog, BenchmarkRun
+ 
+    stats       = get_benchmark_stats_for_paper()
+    recent_logs = PerformanceLog.objects.order_by("-created_at")[:100]
+    recent_runs = BenchmarkRun.objects.order_by("-created_at")[:5]
+ 
+    return render(request, "farm/benchmark_dashboard.html", {
+        "stats":       stats,
+        "recent_logs": recent_logs,
+        "recent_runs": recent_runs,
+    })
+ 
+ 
+@staff_member_required
+@require_POST
+def run_benchmark_view(request):
+    """Benchmark suite চালাও — admin only।"""
+    from .services.benchmarking import run_full_benchmark
+ 
+    try:
+        n_iter = int(request.POST.get("iterations", 10))
+        n_iter = max(3, min(n_iter, 50))
+        suite  = run_full_benchmark(n_iterations=n_iter)
+        messages.success(
+            request,
+            f"✅ Benchmark complete — {len(suite.results)} operations measured. "
+            f"Avg response: {suite.summary.get('avg_response_ms', 0):.1f} ms"
+        )
+    except Exception as e:
+        messages.error(request, f"Benchmark failed: {e}")
+ 
+    return redirect("farm:benchmark_dashboard")
+ 
+ 
+@staff_member_required
+def benchmark_export_json(request):
+    """Benchmark data JSON হিসেবে export করো — admin only।"""
+    from django.http import JsonResponse
+    from .models import PerformanceLog, BenchmarkRun
+ 
+    data = {
+        "performance_logs": list(PerformanceLog.objects.values()),
+        "benchmark_runs":   list(BenchmarkRun.objects.values()),
+        "exported_at":      timezone.now().isoformat(),
+    }
+    response = JsonResponse(data, safe=False, json_dumps_params={"indent": 2})
+    response["Content-Disposition"] = 'attachment; filename="aquasmart_benchmark.json"'
+    return response
+
+# ── Analytics Dashboard ───────────────────────────────────────────────────────
+ 
+@login_required
+def analytics_dashboard(request):
+    """
+    Unified analytics page with:
+      1. Predictive Alerts — temperature & mortality trends
+      2. FCR Analytics     — feed efficiency ranking & history
+      3. Water Quality Heatmap — 7-day multi-pond heatmap
+    """
+    from .services.predictive_alerts import (
+        run_predictive_alerts,
+        get_temperature_trend_data,
+    )
+    from .services.fcr_analytics import (
+        get_feed_efficiency_ranking,
+        get_fcr_history,
+        calculate_batch_fcr,
+    )
+    from .services.water_heatmap import build_water_quality_heatmap
+    import json
+ 
+    user = request.user
+ 
+    # ── 1. Run predictive alerts ──────────────────────────────────────────────
+    new_alerts_count = 0
+    try:
+        new_alerts_count = run_predictive_alerts(user=user)
+    except Exception as e:
+        logger.warning(f"[Analytics] Predictive alert error: {e}")
+ 
+    # Get all unresolved predictive alerts for this user
+    predictive_alerts = (
+        _user_alerts(user)
+        .filter(resolved=False, message__contains="PREDICTIVE")
+        .order_by("-created_at")[:20]
+    )
+ 
+    # ── 2. Temperature trend for each pond ────────────────────────────────────
+    ponds = _user_ponds(user)
+    temp_trends = []
+    for pond in ponds:
+        try:
+            trend = get_temperature_trend_data(pond, days=7)
+            if trend["labels"]:
+                trend["pond_name"] = pond.name
+                trend["pond_id"]   = pond.id
+                temp_trends.append(trend)
+        except Exception:
+            pass
+ 
+    # ── 3. FCR Analytics ──────────────────────────────────────────────────────
+    fcr_ranking = []
+    try:
+        fcr_ranking = get_feed_efficiency_ranking(user=user)
+    except Exception as e:
+        logger.warning(f"[Analytics] FCR ranking error: {e}")
+ 
+    # FCR history for the best batch (lowest FCR)
+    fcr_history_data = None
+    best_batch       = None
+    if fcr_ranking:
+        try:
+            from .models import FishBatch
+            best_batch_id = fcr_ranking[0]["batch_id"]
+            best_batch    = FishBatch.objects.get(pk=best_batch_id)
+            from .services.fcr_analytics import get_fcr_history
+            fcr_history_data = get_fcr_history(best_batch, weeks=8)
+        except Exception as e:
+            logger.warning(f"[Analytics] FCR history error: {e}")
+ 
+    # ── 4. Water Quality Heatmap ──────────────────────────────────────────────
+    heatmap_data = {}
+    try:
+        heatmap_data = build_water_quality_heatmap(user=user, days=7)
+    except Exception as e:
+        logger.warning(f"[Analytics] Heatmap error: {e}")
+ 
+    # ── Prepare JSON for template ─────────────────────────────────────────────
+    temp_trend_json = {}
+    if temp_trends:
+        # Use first pond's trend for main chart
+        t = temp_trends[0]
+        temp_trend_json = {
+            "labels":        t["labels"] + t.get("proj_labels", []),
+            "temps":         t["temps"],
+            "proj_temps":    t.get("proj_temps", []),
+            "do_values":     t["do_values"],
+            "warning_line":  t.get("warning_line", 31),
+            "critical_line": t.get("critical_line", 34),
+            "slope":         t.get("slope", 0),
+            "pond_name":     t.get("pond_name", ""),
+        }
+ 
+    fcr_chart_json = {}
+    if fcr_history_data and fcr_history_data.get("has_data"):
+        fcr_chart_json = {
+            "labels":         fcr_history_data["labels"],
+            "fcr_values":     fcr_history_data["fcr_values"],
+            "feed_values":    fcr_history_data["feed_values"],
+            "benchmark_low":  fcr_history_data["benchmark_low"],
+            "benchmark_high": fcr_history_data["benchmark_high"],
+            "species":        fcr_history_data["species"],
+        }
+ 
+    return render(request, "farm/analytics_dashboard.html", {
+        # Predictive alerts
+        "predictive_alerts":  predictive_alerts,
+        "new_alerts_count":   new_alerts_count,
+        "temp_trends":        temp_trends,
+        "temp_trend_json":    json.dumps(temp_trend_json),
+ 
+        # FCR analytics
+        "fcr_ranking":        fcr_ranking,
+        "fcr_history_data":   fcr_history_data,
+        "fcr_chart_json":     json.dumps(fcr_chart_json),
+        "best_batch":         best_batch,
+ 
+        # Heatmap
+        "heatmap_data":       heatmap_data,
+        "heatmap_json":       json.dumps(heatmap_data, default=str),
+ 
+        # Summary
+        "total_ponds":        ponds.count(),
+        "total_batches":      _user_batches(user).count(),
+    })
+ 
+ 
+# ── FCR detail for a single batch ─────────────────────────────────────────────
+ 
+@login_required
+def fcr_batch_detail(request, pk):
+    """FCR history chart for a specific batch — AJAX JSON response."""
+    from django.http import JsonResponse
+    from .services.fcr_analytics import get_fcr_history, calculate_batch_fcr
+ 
+    batch = get_object_or_404(FishBatch, pk=pk, pond__owner=request.user)
+ 
+    fcr_data     = calculate_batch_fcr(batch)
+    history_data = get_fcr_history(batch, weeks=8)
+ 
+    return JsonResponse({
+        "fcr_data":    fcr_data,
+        "history":     history_data,
+        "batch_name":  str(batch),
+    })
