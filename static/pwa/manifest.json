@@ -1,0 +1,98 @@
+{
+  "name": "AquaSmart — Fish Farm Management",
+  "short_name": "AquaSmart",
+  "description": "Smart Fish Farm Management System with AI predictions and real-time monitoring",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a1628",
+  "theme_color": "#00e5b4",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "en",
+  "categories": ["productivity", "agriculture", "business"],
+
+  "icons": [
+    {
+      "src": "/static/pwa/icons/icon-72x72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/static/pwa/icons/icon-96x96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/static/pwa/icons/icon-128x128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/static/pwa/icons/icon-144x144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/static/pwa/icons/icon-152x152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/static/pwa/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/static/pwa/icons/icon-384x384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/static/pwa/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable any"
+    }
+  ],
+
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "Go to farm dashboard",
+      "url": "/",
+      "icons": [{ "src": "/static/pwa/icons/icon-96x96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Log Feed",
+      "short_name": "Feed",
+      "description": "Log today's feeding",
+      "url": "/feed/add/",
+      "icons": [{ "src": "/static/pwa/icons/icon-96x96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Log Water Quality",
+      "short_name": "Water",
+      "description": "Log water quality reading",
+      "url": "/weather/add/",
+      "icons": [{ "src": "/static/pwa/icons/icon-96x96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Alerts",
+      "short_name": "Alerts",
+      "description": "View farm alerts",
+      "url": "/alerts/",
+      "icons": [{ "src": "/static/pwa/icons/icon-96x96.png", "sizes": "96x96" }]
+    }
+  ],
+
+  "related_applications": [],
+  "prefer_related_applications": false
+}

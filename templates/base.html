@@ -5,12 +5,44 @@
   <meta charset="UTF-8">
   <title>{% block title %}AquaSmart{% endblock %} — Smart Fish Farm</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  {# ── PWA Meta Tags ── #}
+  <meta name="application-name" content="AquaSmart">
+  <meta name="description" content="Smart Fish Farm Management System with AI predictions and real-time monitoring">
+  <meta name="theme-color" content="#00e5b4">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="AquaSmart">
+  <meta name="msapplication-TileColor" content="#0a1628">
+  <meta name="msapplication-TileImage" content="{% static 'pwa/icons/icon-144x144.png' %}">
+
+  {# ── PWA Manifest ── #}
+  <link rel="manifest" href="/manifest.json">
+
+  {# ── Apple Touch Icons ── #}
+  <link rel="apple-touch-icon" href="{% static 'pwa/icons/icon-152x152.png' %}">
+  <link rel="apple-touch-icon" sizes="72x72"   href="{% static 'pwa/icons/icon-72x72.png' %}">
+  <link rel="apple-touch-icon" sizes="96x96"   href="{% static 'pwa/icons/icon-96x96.png' %}">
+  <link rel="apple-touch-icon" sizes="128x128" href="{% static 'pwa/icons/icon-128x128.png' %}">
+  <link rel="apple-touch-icon" sizes="144x144" href="{% static 'pwa/icons/icon-144x144.png' %}">
+  <link rel="apple-touch-icon" sizes="152x152" href="{% static 'pwa/icons/icon-152x152.png' %}">
+  <link rel="apple-touch-icon" sizes="192x192" href="{% static 'pwa/icons/icon-192x192.png' %}">
+  <link rel="apple-touch-icon" sizes="512x512" href="{% static 'pwa/icons/icon-512x512.png' %}">
+
+  {# ── Favicon ── #}
+  <link rel="icon" type="image/png" sizes="32x32" 
+        href="{% static 'pwa/icons/favicon-32x32.png' %}">
+  <link rel="shortcut icon" 
+        href="{% static 'pwa/icons/favicon-32x32.png' %}">
+
+  {# ── Fonts & CSS ── #}
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+
   <style>
-    /* ── Guest banner ─────────────────────────────────────────── */
     .guest-banner {
       background: linear-gradient(90deg, rgba(0,184,255,.12), rgba(0,229,180,.08));
       border-bottom: 1px solid rgba(0,184,255,.25);
@@ -35,6 +67,9 @@
     .guest-banner a.gb-btn:hover { opacity: .8; }
     .gb-login  { background: transparent; border-color: var(--accent2); color: var(--accent2) !important; }
     .gb-signup { background: var(--accent); border-color: var(--accent); color: #0a1628 !important; }
+
+    /* Standalone mode — hide browser UI hints */
+    [data-pwa="standalone"] .guest-banner { padding-top: 14px; }
   </style>
   {% block extra_head %}{% endblock %}
 </head>
@@ -44,7 +79,7 @@
 
 <div class="shell">
 
-  <!-- ── Sidebar ─────────────────────────────────────── -->
+  <!-- ── Sidebar ──────────────────────────────────────── -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-logo">
       <div class="logo-mark">🐟</div>
@@ -139,10 +174,14 @@
          class="nav-item {% block nav_reminders %}{% endblock %}">
         <span class="nav-icon">🔔</span> Reminders
       </a>
+
+      {# ── Analytics — authenticated users only ── #}
+      {% if request.user.is_authenticated %}
       <a href="{% url 'farm:analytics_dashboard' %}"
-        class="nav-item {% block nav_analytics %}{% endblock %}">
+         class="nav-item {% block nav_analytics %}{% endblock %}">
         <span class="nav-icon">📊</span> Analytics
       </a>
+      {% endif %}
 
       <div class="nav-section">AI Assistant</div>
       <a href="{% url 'farm:fish_doctor' %}"
@@ -150,7 +189,7 @@
         <span class="nav-icon">🐟</span> Fish Doctor
       </a>
 
-      {# ── Admin only — regular user দেখবে না ── #}
+      {# ── Admin only ── #}
       {% if request.user.is_staff or request.user.is_superuser %}
       <div class="nav-section">Admin Tools</div>
       <a href="{% url 'farm:benchmark_dashboard' %}"
@@ -222,7 +261,7 @@
     </div>
   </aside>
 
-  <!-- ── Main ────────────────────────────────────────── -->
+  <!-- ── Main ─────────────────────────────────────────── -->
   <div class="main">
 
     {# ── Guest banner ── #}
@@ -249,7 +288,8 @@
       </div>
 
       <div class="topbar-actions">
-        <button id="theme-toggle" class="btn btn-outline" style="font-size: 16px; padding: 5px 10px;" title="Toggle Theme">
+        <button id="theme-toggle" class="btn btn-outline"
+                style="font-size:16px;padding:5px 10px;" title="Toggle Theme">
           <span id="theme-icon">☀️</span>
         </button>
         {% block topbar_actions %}
@@ -316,47 +356,50 @@
   var btn     = document.getElementById('hamburgerBtn');
   var sidebar = document.getElementById('sidebar');
   var overlay = document.getElementById('sidebarOverlay');
-
   function close() {
     sidebar.classList.remove('open');
     overlay.classList.remove('open');
   }
   function toggle() {
-    sidebar.classList.contains('open') ? close() : (sidebar.classList.add('open'), overlay.classList.add('open'));
+    sidebar.classList.contains('open')
+      ? close()
+      : (sidebar.classList.add('open'), overlay.classList.add('open'));
   }
-
   if (btn)     btn.addEventListener('click', toggle);
   if (overlay) overlay.addEventListener('click', close);
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') close();
+  });
 })();
 </script>
 
 {% block extra_scripts %}{% endblock %}
 
 <script>
-  document.addEventListener("DOMContentLoaded", function() {
-    const toggleBtn = document.getElementById('theme-toggle');
-    const themeIcon = document.getElementById('theme-icon');
-
-    const savedTheme = localStorage.getItem('theme') || 'dark';
-    if (savedTheme === 'light') {
+document.addEventListener("DOMContentLoaded", function() {
+  var toggleBtn = document.getElementById('theme-toggle');
+  var themeIcon = document.getElementById('theme-icon');
+  var savedTheme = localStorage.getItem('theme') || 'dark';
+  if (savedTheme === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+    themeIcon.textContent = '🌙';
+  }
+  toggleBtn.addEventListener('click', function() {
+    var current = document.documentElement.getAttribute('data-theme');
+    if (current === 'light') {
+      document.documentElement.removeAttribute('data-theme');
+      localStorage.setItem('theme', 'dark');
+      themeIcon.textContent = '☀️';
+    } else {
       document.documentElement.setAttribute('data-theme', 'light');
+      localStorage.setItem('theme', 'light');
       themeIcon.textContent = '🌙';
     }
-
-    toggleBtn.addEventListener('click', () => {
-      const currentTheme = document.documentElement.getAttribute('data-theme');
-      if (currentTheme === 'light') {
-        document.documentElement.removeAttribute('data-theme');
-        localStorage.setItem('theme', 'dark');
-        themeIcon.textContent = '☀️';
-      } else {
-        document.documentElement.setAttribute('data-theme', 'light');
-        localStorage.setItem('theme', 'light');
-        themeIcon.textContent = '🌙';
-      }
-    });
   });
+});
 </script>
+
+{# ── PWA Script — load last ── #}
+<script src="{% static 'pwa/pwa.js' %}" defer></script>
 </body>
 </html>

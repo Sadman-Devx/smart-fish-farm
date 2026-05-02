@@ -36,6 +36,7 @@ Analytics additions (2026-04):
 from datetime import timedelta, date
 from decimal import Decimal
 import base64
+from django.http import JsonResponse
 
 from django.db.models import Avg, Sum, Count, Q
 from django.db.models.functions import TruncDate, TruncMonth
@@ -1415,3 +1416,22 @@ def fcr_batch_detail(request, pk):
         "history":     history_data,
         "batch_name":  str(batch),
     })
+
+def offline_view(request):
+    """PWA offline fallback page."""
+    return render(request, "pwa/offline.html")
+ 
+ 
+def manifest_view(request):
+    """
+    Serve manifest.json dynamically so we can use Django's
+    static URL in icon paths if needed.
+    """
+    import json
+    from django.conf import settings as dj_settings
+    from django.contrib.staticfiles.storage import staticfiles_storage
+ 
+    with open(dj_settings.BASE_DIR / "static" / "pwa" / "manifest.json") as f:
+        manifest = json.load(f)
+ 
+    return JsonResponse(manifest)

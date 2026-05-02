@@ -4,15 +4,8 @@
 {% block topbar_title %}Dashboard{% endblock %}
 
 {% block topbar_actions %}
-  <a href="{% url 'farm:daily_feed_report' %}" class="btn btn-sm">Daily Report</a>
   {% if request.user.is_authenticated %}
-    <form method="post" action="{% url 'farm:send_test_alert' %}" style="display:inline;margin:0">
-      {% csrf_token %}
-      <button type="submit" class="btn btn-sm">Send Alert</button>
-    </form>
-    <a href="{% url 'farm:weather_create' %}" class="btn btn-sm">+ Weather</a>
-    <a href="{% url 'farm:growth_create' %}"  class="btn btn-sm">+ Growth</a>
-    <a href="{% url 'farm:feed_log_create' %}" class="btn btn-accent btn-sm">+ Feed Log</a>
+    <a href="{% url 'accounts:profile' %}" class="btn btn-sm">Profile</a>
   {% else %}
     <a href="{% url 'accounts:login' %}"    class="btn btn-sm">Sign In</a>
     <a href="{% url 'accounts:register' %}" class="btn btn-accent btn-sm">Register</a>

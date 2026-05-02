@@ -9,6 +9,12 @@ from .ai_agent_views import fish_disease_agent, fish_disease_chat
 from . import views
 from . import onboarding_views
 from .ai_agent_views import disease_stats_api, disease_log_api, resolve_disease_alert,fish_disease_chat_stream
+from farm.views import offline_view, manifest_view
+
+from django.views.generic import TemplateView
+from django.views.static import serve
+import os
+from django.conf import settings
 
 app_name = "farm"
 
@@ -76,4 +82,15 @@ urlpatterns = [
 
     path("analytics/",              views.analytics_dashboard, name="analytics_dashboard"),
     path("analytics/fcr/<int:pk>/", views.fcr_batch_detail,    name="fcr_batch_detail"),
+
+    path("offline/",      offline_view,   name="pwa_offline"),
+    path("manifest.json", manifest_view,  name="pwa_manifest"),
+
+    # existing...
+    
+    # Service Worker — root scope 
+    path('sw.js', serve, {
+        'path': 'sw.js',
+        'document_root': settings.BASE_DIR,
+    }, name='sw'),
 ]
