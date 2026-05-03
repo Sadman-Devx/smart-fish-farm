@@ -92,7 +92,7 @@ class WeatherRecord(models.Model):
     ph = models.DecimalField(max_digits=4, decimal_places=2, help_text="Water pH")
     rainfall_mm = models.DecimalField(max_digits=6, decimal_places=2, default=0,
                                       help_text="Rainfall (mm)")
-    source = models.CharField(          # ← নতুন field
+    source = models.CharField(          # ← New field
         max_length=10,
         choices=SOURCE_CHOICES,
         default="manual",
@@ -188,7 +188,7 @@ class SensorReading(models.Model):
         return f"{self.pond.name} {self.sensor_type}={self.value} at {self.recorded_at}"
 
 
-# ── NEW: HarvestRecord ────────────────────────────────────────────────────────
+# ── HarvestRecord ─────────────────────────────────────────────────────────────
 class HarvestRecord(models.Model):
     batch = models.ForeignKey(FishBatch, on_delete=models.CASCADE, related_name="harvests")
     harvest_date = models.DateField(default=timezone.now)
@@ -214,7 +214,7 @@ class HarvestRecord(models.Model):
         return round(float(self.total_weight_kg) * float(self.price_per_kg), 2)
 
 
-# ── NEW: Expense ──────────────────────────────────────────────────────────────
+# ── Expense ──────────────────────────────────────────────────────────────────
 class Expense(models.Model):
     CATEGORY_CHOICES = [
         ("feed", "Feed"),
@@ -244,7 +244,7 @@ class Expense(models.Model):
         return f"{self.get_category_display()} – {self.amount} BDT ({self.date})"
 
 
-# ── NEW: MortalityLog ─────────────────────────────────────────────────────────
+# ── MortalityLog ─────────────────────────────────────────────────────────────
 class MortalityLog(models.Model):
     CAUSE_CHOICES = [
         ("disease", "Disease"),
@@ -268,7 +268,7 @@ class MortalityLog(models.Model):
         return f"{self.count} dead ({self.get_cause_display()}) – {self.batch} – {self.date}"
 
 
-# ── NEW: FarmAlert ────────────────────────────────────────────────────────────
+# ── FarmAlert ────────────────────────────────────────────────────────────────
 class FarmAlert(models.Model):
     LEVEL_CHOICES = [
         ("info", "Info"),
@@ -306,7 +306,7 @@ class FarmAlert(models.Model):
         self.save()
 
 
-# ── NEW: PondNote ─────────────────────────────────────────────────────────────
+# ── PondNote ─────────────────────────────────────────────────────────────────
 class PondNote(models.Model):
     pond = models.ForeignKey(Pond, on_delete=models.CASCADE, related_name="notes")
     author = models.CharField(max_length=100, default="Farm Manager")
@@ -320,14 +320,7 @@ class PondNote(models.Model):
         return f"Note – {self.pond.name} – {self.created_at:%Y-%m-%d}"
 
 
-"""
-Append this block to the bottom of farm/models.py
-─────────────────────────────────────────────────
-Add the import at the top of models.py:
-    from django.conf import settings
-"""
-
-# ── FarmProfile ───────────────────────────────────────────────────────────────
+# ── FarmProfile ──────────────────────────────────────────────────────────────
 
 class FarmProfile(models.Model):
     """
@@ -458,11 +451,6 @@ class FarmProfile(models.Model):
         return ", ".join(label_map.get(s, s) for s in (self.species or []))
 
 
-"""
-farm/models.py এর একদম শেষে এই দুটো model যোগ করো।
-────────────────────────────────────────────────────
-"""
-
 # ── PerformanceLog ────────────────────────────────────────────────────────────
 
 class PerformanceLog(models.Model):
@@ -518,12 +506,11 @@ class BenchmarkRun(models.Model):
     def __str__(self):
         return f"{self.suite_name} — {self.created_at:%Y-%m-%d %H:%M}"
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# INSTRUCTION: farm/models.py এর একদম শেষে এই দুটো class যোগ করো
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# ── DiseaseLog ────────────────────────────────────────────────────────────────
 
 class DiseaseLog(models.Model):
-    """Fish Doctor এ detected disease গুলো store করে।"""
+    """Stores diseases detected in the Fish Doctor feature."""
 
     SEVERITY_CHOICES = [
         ("low",      "Low"),
@@ -556,8 +543,10 @@ class DiseaseLog(models.Model):
         return f"{self.disease_name} ({self.severity}) — {self.detected_at:%Y-%m-%d}"
 
 
+# ── DiseaseAlert ──────────────────────────────────────────────────────────────
+
 class DiseaseAlert(models.Model):
-    """একই রোগ বারবার হলে auto alert তৈরি করে।"""
+    """Creates an auto alert when the same disease is detected repeatedly."""
 
     user         = models.ForeignKey(
         settings.AUTH_USER_MODEL,

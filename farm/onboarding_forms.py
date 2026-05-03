@@ -98,6 +98,7 @@ class OnboardingStep2Form(forms.Form):
     )
 
     # Dropdown fallback (shown only when GPS is denied)
+    # Note: Choices are updated dynamically via AJAX/JavaScript on the frontend
     district = forms.ChoiceField(
         choices=DISTRICT_CHOICES,
         required=False,

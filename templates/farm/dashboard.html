@@ -467,7 +467,18 @@
             {% else %}—{% endif %}
           </td>
           <td class="text-end text-muted">
-            {% if row.temp_c is not None %}{{ row.temp_c|floatformat:1 }} °C{% else %}—{% endif %}
+            {% if row.temp_c is not None %}
+              {{ row.temp_c|floatformat:1 }} °C
+              {% if row.temp_source == "sensor" %}
+                <span title="IoT Sensor" style="font-size:0.65rem;color:var(--accent1);margin-left:3px;">● sensor</span>
+              {% elif row.temp_source == "manual" %}
+                <span title="Manual Entry" style="font-size:0.65rem;color:var(--accent2);margin-left:3px;">● manual</span>
+              {% elif row.temp_source == "api" %}
+                <span title="Weather API (air temp)" style="font-size:0.65rem;color:var(--text-muted);margin-left:3px;">● api</span>
+              {% else %}
+                <span title="Auto estimate (air−2°C)" style="font-size:0.65rem;color:var(--text-muted);margin-left:3px;">● auto</span>
+              {% endif %}
+            {% else %}—{% endif %}
           </td>
         </tr>
         {% endfor %}

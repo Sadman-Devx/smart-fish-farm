@@ -13,4 +13,3 @@ urlpatterns = [
     path("weather-records/", api_views.WeatherRecordListAPI.as_view(), name="weather-list"),
     path("feed-logs/", api_views.FeedLogListAPI.as_view(), name="feed-log-list"),
 ]
-

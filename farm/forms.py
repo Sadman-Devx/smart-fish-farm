@@ -11,8 +11,9 @@ Usage in views:
 from django import forms
 from .models import (
     FeedLog, GrowthRecord, WeatherRecord, FishBatch, Pond,
-    HarvestRecord, Expense, MortalityLog, FarmAlert, PondNote,
+    HarvestRecord, Expense, MortalityLog, FarmAlert, PondNote, FarmProfile,
 )
+from .bd_geo import DISTRICT_CHOICES, get_upazila_choices
 
 
 # ── Mixin: inject user-scoped querysets ───────────────────────────────────────
@@ -215,4 +216,38 @@ class FishBatchForm(UserScopedFormMixin, forms.ModelForm):
         }
 
 
+# ── FarmProfileForm (For Onboarding) ────────────────────────────────────────
 
+class FarmProfileForm(forms.ModelForm):
+    # District data comes from bd_geo
+    district = forms.ChoiceField(choices=DISTRICT_CHOICES)
+    # Upazila will be empty initially
+    upazila = forms.ChoiceField(choices=[("", "— Select Upazila —")])
+
+    class Meta:
+        model = FarmProfile
+        fields = [
+            "farm_name", "size_acres", "num_ponds", "water_source",
+            "district", "upazila", "species", "farming_experience_years",
+        ]
+        widgets = {
+            "notes": forms.Textarea(attrs={"rows": 2}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # If the user has already selected a district (e.g., on an edit page)
+        # Then load the upazilas for that district
+        if self.instance and getattr(self.instance, 'district', None):
+            self.fields['upazila'].choices = get_upazila_choices(self.instance.district)
+
+    def clean_upazila(self):
+        """Security check: Ensure user cannot select an upazila from the wrong district."""
+        district = self.cleaned_data.get("district")
+        upazila = self.cleaned_data.get("upazila")
+        
+        valid_upazilas = [u[0] for u in get_upazila_choices(district)]
+        if upazila not in valid_upazilas:
+            raise forms.ValidationError("Selected upazila is not valid for the chosen district.")
+        return upazila

@@ -207,6 +207,9 @@ def onboarding_step3(request):
 def _fetch_weather_for_profile(profile: FarmProfile) -> dict:
     """
     Fetch current weather from OpenWeatherMap using the profile's location.
+    Note: This is a synchronous call. It is acceptable here because we specifically
+    want to show the user the weather result on this confirmation screen before
+    they finish. (For general dashboard loading, we use cached data instead).
 
     Coordinate priority:
       1. GPS lat/lng stored in profile
@@ -298,9 +301,12 @@ def onboarding_step4(request):
         # "Finish" button clicked — mark onboarding done and go to dashboard
         profile.onboarding_complete = True
         profile.save(update_fields=["onboarding_complete"])
+        
+        # ✅ FIXED: Changed request.user.display_name to get_full_name()
+        user_name = request.user.get_full_name() or request.user.username
         messages.success(
             request,
-            f"Welcome to AquaSmart, {request.user.display_name}! "
+            f"Welcome to AquaSmart, {user_name}! "
             "Your farm profile is ready. 🐟",
         )
         return redirect("farm:dashboard")

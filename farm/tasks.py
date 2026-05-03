@@ -9,6 +9,7 @@ from .models import DailyWeather, FishBatch, Pond, WeatherRecord, FarmProfile
 from .notifications import send_email_notification, send_sms_notification, send_whatsapp_notification
 from .services import smart_feed_kg_for_batch
 from .services.weather_ingest import get_feeding_suggestion, get_weather_for_location, get_weather_by_city
+from .services.generate_water_alerts import generate_water_alerts
 
 User = get_user_model()
 

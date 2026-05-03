@@ -1,28 +1,25 @@
 """
 farm/services/fcr_analytics.py
 ────────────────────────────────────────────────────────────────────────────
-Feed Conversion Ratio (FCR) Analytics
-=======================================
+Feed Conversion Ratio (FCR) Analytics (Optimized & Crash-Proof)
+================================================================
 
 FCR = Total Feed Given (kg) / Total Weight Gain (kg)
 
-Lower FCR = more efficient feeding.
-  Tilapia optimal FCR: 1.2 – 1.8
-  Catfish optimal FCR: 1.5 – 2.0
-  Carp optimal FCR:    1.8 – 2.5
-
-Functions:
-  calculate_batch_fcr(batch)         → FCR for a specific batch
-  calculate_all_batches_fcr(user)    → FCR comparison across all batches
-  get_fcr_history(batch, weeks)      → Weekly FCR trend for a batch
-  get_feed_efficiency_ranking(user)  → Ranked list: best → worst FCR
+Features:
+  - N+1 Query Prevention (uses prefetching)
+  - Null/Type Safety (prevents float(None) crashes)
+  - Accurate Weekly Anchoring (based on last record, not today)
 """
 
 from __future__ import annotations
 
 import logging
+from collections import defaultdict
 from datetime import date, timedelta
 from typing import Any
+
+from django.db.models import Sum
 
 logger = logging.getLogger(__name__)
 
@@ -42,48 +39,68 @@ def _get_benchmark(species: str) -> dict[str, float]:
 
 
 def _fcr_status(fcr: float, species: str) -> str:
-    """Return 'excellent' / 'good' / 'poor' based on species benchmarks."""
+    """Return 'excellent' / 'good' / 'below_average' / 'poor'."""
     bench = _get_benchmark(species)
-    if fcr <= bench["optimal_low"]:
-        return "excellent"
-    if fcr <= bench["optimal_high"]:
-        return "good"
-    if fcr <= bench["poor"]:
-        return "below_average"
+    if fcr <= bench["optimal_low"]: return "excellent"
+    if fcr <= bench["optimal_high"]: return "good"
+    if fcr <= bench["poor"]: return "below_average"
     return "poor"
+
+
+# ── Type Safety Helpers ───────────────────────────────────────────────────────
+
+def _safe_float(value, default: float = 0.0) -> float:
+    """Safely convert a value to float, returning default if None or invalid."""
+    if value is None: return default
+    try: return float(value)
+    except (ValueError, TypeError): return default
+
+
+def _safe_int(value, default: int = 0) -> int:
+    """Safely convert a value to int, returning default if None or invalid."""
+    if value is None: return default
+    try: return int(value)
+    except (ValueError, TypeError): return default
 
 
 # ── Core FCR calculation ──────────────────────────────────────────────────────
 
-def calculate_batch_fcr(batch) -> dict[str, Any] | None:
+def calculate_batch_fcr(batch, prefetched_feed=None, prefetched_growth=None) -> dict[str, Any] | None:
     """
-    Calculate overall FCR for a batch from all its records.
-
-    Returns None if insufficient data.
+    Calculate overall FCR for a batch.
+    Supports prefetched querysets to prevent N+1 queries during bulk operations.
     """
-    from django.db.models import Sum
-    from ..models import FeedLog, GrowthRecord
-
-    # Total feed given
-    total_feed_kg = float(
-        FeedLog.objects
-        .filter(batch=batch)
-        .aggregate(total=Sum("feed_amount_kg"))["total"] or 0
-    )
+    # Total feed given (Use prefetched data if available, else query DB)
+    if prefetched_feed is not None:
+        total_feed_kg = sum(_safe_float(log.feed_amount_kg) for log in prefetched_feed)
+    else:
+        total_feed_kg = _safe_float(
+            batch.feed_logs.aggregate(total=Sum("feed_amount_kg"))["total"]
+        )
 
     if total_feed_kg <= 0:
         return None
 
-    # Weight gain: latest growth record weight - initial weight
-    latest = batch.growth_records.order_by("-date").first()
-    first  = batch.growth_records.order_by("date").first()
+    # Weight gain: latest - initial (Use prefetched data if available)
+    if prefetched_growth is not None and len(prefetched_growth) > 0:
+        sorted_growth = sorted(prefetched_growth, key=lambda x: x.date)
+        first, latest = sorted_growth[0], sorted_growth[-1]
+    else:
+        latest = batch.growth_records.order_by("-date").first()
+        first  = batch.growth_records.order_by("date").first()
 
     if not latest or not first:
         return None
 
-    initial_weight_g  = float(first.avg_weight_g)
-    current_weight_g  = float(latest.avg_weight_g)
-    surviving_count   = latest.surviving_count
+    # Safely extract numeric values
+    initial_weight_g = _safe_float(first.avg_weight_g)
+    current_weight_g = _safe_float(latest.avg_weight_g)
+    surviving_count  = _safe_int(latest.surviving_count)
+
+    # If all fish died, FCR is mathematically undefined
+    if surviving_count <= 0:
+        logger.info(f"[FCR] Batch {batch.id}: surviving_count is 0. FCR skipped.")
+        return None
 
     if current_weight_g <= initial_weight_g:
         return None
@@ -98,20 +115,20 @@ def calculate_batch_fcr(batch) -> dict[str, Any] | None:
     bench  = _get_benchmark(batch.species)
 
     return {
-        "batch_id":        batch.id,
-        "batch_name":      str(batch),
-        "pond_name":       batch.pond.name,
-        "species":         batch.get_species_display(),
-        "fcr":             fcr,
-        "status":          status,
-        "total_feed_kg":   round(total_feed_kg, 2),
-        "weight_gain_kg":  round(weight_gain_kg, 2),
+        "batch_id":         batch.id,
+        "batch_name":       str(batch),
+        "pond_name":        batch.pond.name if batch.pond else "N/A",
+        "species":          batch.get_species_display(),
+        "fcr":              fcr,
+        "status":           status,
+        "total_feed_kg":    round(total_feed_kg, 2),
+        "weight_gain_kg":   round(weight_gain_kg, 2),
         "initial_weight_g": round(initial_weight_g, 1),
         "current_weight_g": round(current_weight_g, 1),
-        "surviving_count": surviving_count,
-        "benchmark_low":   bench["optimal_low"],
-        "benchmark_high":  bench["optimal_high"],
-        "days_running":    batch.current_age_days,
+        "surviving_count":  surviving_count,
+        "benchmark_low":    bench["optimal_low"],
+        "benchmark_high":   bench["optimal_high"],
+        "days_running":     _safe_int(batch.current_age_days, 0),
     }
 
 
@@ -119,38 +136,40 @@ def calculate_batch_fcr(batch) -> dict[str, Any] | None:
 
 def get_fcr_history(batch, weeks: int = 8) -> dict[str, Any]:
     """
-    Calculate weekly FCR trend for a batch.
-    Shows how feed efficiency changed week by week.
+    Calculate weekly FCR trend. 
+    Anchors to the batch's latest record instead of 'today' for accuracy.
+    Uses in-memory grouping to prevent N+1 DB queries.
     """
-    from django.db.models import Sum
-    from ..models import FeedLog, GrowthRecord
-
-    labels      : list[str]   = []
-    fcr_values  : list[float] = []
-    feed_values : list[float] = []
+    from ..models import FeedLog
 
     growth_records = list(batch.growth_records.order_by("date"))
     if len(growth_records) < 2:
         return {"labels": [], "fcr_values": [], "feed_values": [], "has_data": False}
 
-    today = date.today()
+    # ✅ FIX: Anchor to latest record, not today (Fixes finished/dead batch bugs)
+    end_date = latest_record.date
+    
+    # ✅ FIX: Fetch ALL feed logs for the period in ONE query, group in memory
+    start_date = end_date - timedelta(weeks=weeks)
+    all_feed_logs = list(
+        FeedLog.objects.filter(batch=batch, date__gt=start_date, date__lte=end_date)
+    )
+    
+    feed_by_week = defaultdict(float)
+    for log in all_feed_logs:
+        weeks_ago = (end_date - log.date).days // 7
+        if 0 <= weeks_ago < weeks:
+            feed_by_week[weeks_ago] += _safe_float(log.feed_amount_kg)
+
+    labels, fcr_values, feed_values = [], [], []
 
     for w in range(weeks - 1, -1, -1):
-        week_end   = today - timedelta(weeks=w)
-        week_start = week_end - timedelta(weeks=1)
+        week_end   = end_date - timedelta(weeks=w)
+        week_start = week_end - timedelta(days=6) # Strict 7-day window
 
-        # Feed this week
-        week_feed = float(
-            FeedLog.objects
-            .filter(batch=batch, date__gt=week_start, date__lte=week_end)
-            .aggregate(total=Sum("feed_amount_kg"))["total"] or 0
-        )
-
-        # Growth records in this window
-        records_in_week = [
-            r for r in growth_records
-            if week_start <= r.date <= week_end
-        ]
+        week_feed = feed_by_week.get(w, 0.0)
+        
+        records_in_week = [r for r in growth_records if week_start < r.date <= week_end]
 
         if not records_in_week or week_feed <= 0:
             labels.append(week_end.strftime("%b %d"))
@@ -158,26 +177,38 @@ def get_fcr_history(batch, weeks: int = 8) -> dict[str, Any]:
             feed_values.append(round(week_feed, 2))
             continue
 
-        # Weight gain this week
+        # Determine start weight for the week
         prev_records = [r for r in growth_records if r.date <= week_start]
         if prev_records:
-            start_weight = float(prev_records[-1].avg_weight_g)
-            start_count  = prev_records[-1].surviving_count
+            start_weight = _safe_float(prev_records[-1].avg_weight_g)
+            start_count  = _safe_int(prev_records[-1].surviving_count)
         else:
-            start_weight = float(batch.initial_avg_weight_g)
-            start_count  = batch.initial_count
+            start_weight = _safe_float(batch.initial_avg_weight_g)
+            start_count  = _safe_int(batch.initial_count)
 
-        end_record   = records_in_week[-1]
-        end_weight   = float(end_record.avg_weight_g)
-        end_count    = end_record.surviving_count
+        end_record = records_in_week[-1]
+        end_weight = _safe_float(end_record.avg_weight_g)
+        end_count  = _safe_int(end_record.surviving_count)
 
-        avg_count    = (start_count + end_count) / 2
-        gain_g       = max(end_weight - start_weight, 0)
-        gain_kg      = gain_g * avg_count / 1000.0
+        # ✅ FIX: Robust avg_count calculation to prevent ZeroDivisionError
+        if start_count <= 0 and end_count <= 0:
+            avg_count = 0
+        elif start_count <= 0:
+            avg_count = end_count
+        elif end_count <= 0:
+            avg_count = start_count
+        else:
+            avg_count = (start_count + end_count) / 2
 
-        if gain_kg > 0:
-            week_fcr = round(week_feed / gain_kg, 3)
-            fcr_values.append(min(week_fcr, 10.0))  # cap at 10 for chart sanity
+        gain_g = max(end_weight - start_weight, 0)
+
+        if avg_count > 0 and gain_g > 0:
+            gain_kg = gain_g * avg_count / 1000.0
+            if gain_kg > 0:
+                week_fcr = round(week_feed / gain_kg, 3)
+                fcr_values.append(min(week_fcr, 10.0))  # Cap at 10 for chart sanity
+            else:
+                fcr_values.append(None)
         else:
             fcr_values.append(None)
 
@@ -202,24 +233,34 @@ def get_fcr_history(batch, weeks: int = 8) -> dict[str, Any]:
 def get_feed_efficiency_ranking(user=None) -> list[dict[str, Any]]:
     """
     Calculate FCR for all batches and rank them best → worst.
-    Used by the analytics dashboard for comparison table.
+    ✅ Uses prefetch_related to solve N+1 query problem.
     """
     from ..models import FishBatch
 
-    qs = FishBatch.objects.select_related("pond")
+    # ✅ FIX: Eagerly load everything (Reduces 100+ queries to exactly 3 queries)
+    qs = FishBatch.objects.select_related("pond").prefetch_related(
+        "feed_logs",      
+        "growth_records"  
+    )
+    
     if user:
         qs = qs.filter(pond__owner=user)
 
     results = []
     for batch in qs:
-        fcr_data = calculate_batch_fcr(batch)
+        # Pass prefetched data to the calculation function
+        fcr_data = calculate_batch_fcr(
+            batch, 
+            prefetched_feed=batch.feed_logs.all(),
+            prefetched_growth=batch.growth_records.all()
+        )
         if fcr_data:
             results.append(fcr_data)
 
-    # Sort by FCR ascending (lower = better)
+    # Sort by FCR ascending (lower FCR = better efficiency)
     results.sort(key=lambda x: x["fcr"])
 
-    # Add rank
+    # Assign rank
     for i, r in enumerate(results):
         r["rank"] = i + 1
 

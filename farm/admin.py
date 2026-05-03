@@ -9,33 +9,42 @@ from .models import (
 
 @admin.register(Pond)
 class PondAdmin(admin.ModelAdmin):
-    list_display = ("name", "area_m2", "max_depth_m", "created_at")
-    search_fields = ("name",)
+    list_display = ("name", "owner", "area_m2", "max_depth_m", "created_at") # ✅ Added owner
+    list_filter = ("owner",) # ✅ Filter option by user
+    search_fields = ("name", "owner__email", "owner__username")
 
 
 @admin.register(FishBatch)
 class FishBatchAdmin(admin.ModelAdmin):
-    list_display = ("pond", "species", "stocking_date", "initial_count", "initial_avg_weight_g")
-    list_filter = ("species", "pond")
-    search_fields = ("pond__name",)
+    list_display = ("pond", "species", "stocking_date", "initial_count", "initial_avg_weight_g", "get_owner") # ✅ Added owner
+    list_filter = ("species", "pond__owner") # ✅ Filter by owner through pond
+    search_fields = ("pond__name", "pond__owner__email")
+
+    def get_owner(self, obj):
+        return obj.pond.owner
+    get_owner.short_description = "Owner"
+    get_owner.admin_order_field = "pond__owner"
 
 
 @admin.register(GrowthRecord)
 class GrowthRecordAdmin(admin.ModelAdmin):
     list_display = ("batch", "date", "surviving_count", "avg_weight_g")
-    list_filter = ("batch", "date")
+    list_filter = ("batch__pond__owner", "date") # ✅ Owner filter added
+    date_hierarchy = "date" # ✅ Added calendar navigation
 
 
 @admin.register(WeatherRecord)
 class WeatherRecordAdmin(admin.ModelAdmin):
-    list_display = ("pond", "timestamp", "water_temp_c", "dissolved_oxygen_mg_l", "ph")
-    list_filter = ("pond", "timestamp")
+    list_display = ("pond", "timestamp", "water_temp_c", "dissolved_oxygen_mg_l", "ph", "source")
+    list_filter = ("pond__owner", "source") # ✅ Owner filter added
+    date_hierarchy = "timestamp" # ✅ Added calendar navigation
 
 
 @admin.register(DailyWeather)
 class DailyWeatherAdmin(admin.ModelAdmin):
     list_display = ("date", "temperature_c", "condition", "feed_percent")
     ordering = ("-date",)
+    date_hierarchy = "date" # ✅ Added calendar navigation
 
 
 @admin.register(FeedingProfile)
@@ -46,46 +55,72 @@ class FeedingProfileAdmin(admin.ModelAdmin):
 @admin.register(FeedLog)
 class FeedLogAdmin(admin.ModelAdmin):
     list_display = ("batch", "date", "feed_amount_kg", "auto_calculated")
-    list_filter = ("batch", "date")
+    list_filter = ("batch__pond__owner", "date") # ✅ Owner filter added
+    date_hierarchy = "date" # ✅ Added calendar navigation
 
 
 @admin.register(FeedingReminder)
 class FeedingReminderAdmin(admin.ModelAdmin):
     list_display = ("batch", "scheduled_for", "sent")
-    list_filter = ("sent", "scheduled_for")
+    list_filter = ("sent", "batch__pond__owner") # ✅ Owner filter added
 
 
 @admin.register(SensorReading)
 class SensorReadingAdmin(admin.ModelAdmin):
     list_display = ("pond", "sensor_type", "value", "recorded_at", "source")
-    list_filter = ("pond", "sensor_type", "recorded_at")
+    list_filter = ("pond__owner", "sensor_type") # ✅ Owner filter added
+    date_hierarchy = "recorded_at" # ✅ Added calendar navigation
 
 
 @admin.register(HarvestRecord)
 class HarvestRecordAdmin(admin.ModelAdmin):
-    list_display = ("batch", "harvest_date", "harvested_count", "total_weight_kg", "price_per_kg", "buyer_name")
-    list_filter = ("harvest_date", "batch__pond")
-    search_fields = ("batch__pond__name", "buyer_name")
+    list_display = ("batch", "harvest_date", "harvested_count", "total_weight_kg", "price_per_kg", "buyer_name", "get_owner")
+    list_filter = ("harvest_date", "batch__pond__owner") # ✅ Owner filter added
+    search_fields = ("batch__pond__name", "buyer_name", "batch__pond__owner__email")
+    date_hierarchy = "harvest_date" # ✅ Added calendar navigation
+
+    def get_owner(self, obj):
+        return obj.batch.pond.owner
+    get_owner.short_description = "Owner"
+    get_owner.admin_order_field = "batch__pond__owner"
 
 
 @admin.register(Expense)
 class ExpenseAdmin(admin.ModelAdmin):
-    list_display = ("date", "category", "description", "amount", "pond")
-    list_filter = ("category", "date", "pond")
-    search_fields = ("description",)
+    list_display = ("date", "category", "description", "amount", "pond", "get_owner")
+    list_filter = ("category", "pond__owner") # ✅ Owner filter added
+    search_fields = ("description", "pond__owner__email")
+    date_hierarchy = "date" # ✅ Added calendar navigation
+
+    def get_owner(self, obj):
+        return obj.pond.owner
+    get_owner.short_description = "Owner"
+    get_owner.admin_order_field = "pond__owner"
 
 
 @admin.register(MortalityLog)
 class MortalityLogAdmin(admin.ModelAdmin):
-    list_display = ("batch", "date", "count", "cause")
-    list_filter = ("cause", "date")
+    list_display = ("batch", "date", "count", "cause", "get_owner")
+    list_filter = ("cause", "batch__pond__owner") # ✅ Owner filter added
+    date_hierarchy = "date" # ✅ Added calendar navigation
+
+    def get_owner(self, obj):
+        return obj.batch.pond.owner
+    get_owner.short_description = "Owner"
+    get_owner.admin_order_field = "batch__pond__owner"
 
 
 @admin.register(FarmAlert)
 class FarmAlertAdmin(admin.ModelAdmin):
-    list_display = ("alert_type", "level", "pond", "resolved", "created_at")
-    list_filter = ("level", "alert_type", "resolved")
+    list_display = ("alert_type", "level", "pond", "resolved", "created_at", "get_owner")
+    list_filter = ("level", "alert_type", "resolved", "pond__owner") # ✅ Owner filter added
+    search_fields = ("pond__name", "pond__owner__email", "message") # ✅ Message search added
     actions = ["mark_resolved"]
+
+    def get_owner(self, obj):
+        return obj.pond.owner
+    get_owner.short_description = "Owner"
+    get_owner.admin_order_field = "pond__owner"
 
     def mark_resolved(self, request, queryset):
         from django.utils import timezone
@@ -96,7 +131,7 @@ class FarmAlertAdmin(admin.ModelAdmin):
 @admin.register(PondNote)
 class PondNoteAdmin(admin.ModelAdmin):
     list_display = ("pond", "author", "created_at")
-    list_filter = ("pond",)
+    list_filter = ("pond__owner",) # ✅ Owner filter added
 
 
 @admin.register(FarmProfile)

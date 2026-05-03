@@ -14,7 +14,7 @@ import base64
 import re
 from datetime import timedelta
 from django.utils import timezone
-
+from django.core.cache import cache
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse, StreamingHttpResponse
@@ -24,10 +24,17 @@ from django.db.models import Count
 
 from .models import DiseaseLog, DiseaseAlert
 
+# ✅ PRO TIP: Import at the top level to avoid reloading the module on every request
+try:
+    from google import genai
+    from google.genai import types
+except ImportError:
+    genai = None
+    types = None
+
 logger = logging.getLogger(__name__)
 
 # ── Gemini model fallback list ────────────────────────────────────────────────
-# প্রথমটা quota শেষ হলে পরেরটা try করবে
 GEMINI_MODELS = [
     "models/gemini-2.5-flash",
     "models/gemini-2.5-flash-lite-preview",
@@ -76,9 +83,23 @@ DISEASE_FORMAT = {
 }
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ─────────────────────────────────────────────────────────────────────────────
+# CENTRALIZED HELPERS (Moved to top for reusability & performance)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def rate_limit_check(user_id, limit=5, timeout=60):
+    """Returns True if the user has exceeded the limit within the timeout."""
+    key = f"rate_limit_ai_{user_id}"
+    count = cache.get_or_set(key, 0, timeout)
+    if count >= limit:
+        return True
+    cache.incr(key)
+    return False
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # PROMPT BUILDER
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ─────────────────────────────────────────────────────────────────────────────
 
 def build_system_prompt(language: str, species: str = "General") -> str:
     """Build a language-specific system prompt for Fish Doctor."""
@@ -91,7 +112,7 @@ def build_system_prompt(language: str, species: str = "General") -> str:
     fmt = DISEASE_FORMAT.get(language, DISEASE_FORMAT["English"])
 
     return f"""You are "Fish Doctor" — a highly experienced, warm, and friendly fish disease expert AI.
-You are part of the AquaSmart Fish Farm Management System.
+You are part of the "AquaSmart" Fish Farm Management System.
 
 Your expertise:
 - Fish disease identification from images with high accuracy
@@ -118,23 +139,21 @@ For general questions and conversation, respond naturally and warmly — no need
 You genuinely care about the farmer's fish and livelihood."""
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ─────────────────────────────────────────────────────────────────────────────
 # GEMINI CLIENT
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ─────────────────────────────────────────────────────────────────────────────
 
 def get_gemini_client():
     """Create and return a Google Gemini client."""
-    try:
-        from google import genai
-        return genai.Client(api_key=settings.GOOGLE_API_KEY)
-    except ImportError:
+    if genai is None:
         raise RuntimeError("google-genai not found. Run: pip install google-genai")
+    return genai.Client(api_key=settings.GOOGLE_API_KEY)
 
 
 def _is_quota_error(error_str: str) -> bool:
     """Check if an error string indicates a rate limit / quota issue."""
     s = error_str.lower()
-    return "429" in error_str or "quota" in s or "rate" in s or "resource_exhausted" in s
+    return "429" in s or "quota" in s or "rate" in s or "resource_exhausted" in s
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -162,7 +181,7 @@ def detect_severity(text: str) -> str:
 def extract_disease_name(text: str) -> str:
     """Try to extract disease name from the AI response."""
     patterns = [
-        r'\*\*([^*]+?)\s*[—\-–]\s*(?:নিশ্চিততা|confidence)',
+        r'\*\*([^*]+?)\s*[—\-–]\s*(?:নিশ্চিত্তা|confidence)',
         r'রোগের নাম[:\s]*\*{0,2}([^\*\n]+)',
         r'Disease (?:name|Identification)[:\s]*\*{0,2}([^\*\n]+)',
         r'🔍\s*\*{0,2}([^\*\n]+?)\*{0,2}\s*[—\-–]',
@@ -191,17 +210,13 @@ def is_disease_reply(text: str) -> bool:
 
 
 def save_disease_log_and_check_recurring(request, reply_text, species, severity):
-    """
-    Save DiseaseLog. Update or create DiseaseAlert.
-    Returns (occurrence_count, is_recurring).
-    """
+    """Save DiseaseLog. Update or create DiseaseAlert."""
     if not is_disease_reply(reply_text):
         return 0, False
 
     disease_name = extract_disease_name(reply_text)
     user = request.user
 
-    # Save the log
     DiseaseLog.objects.create(
         user=user,
         disease_name=disease_name,
@@ -210,7 +225,6 @@ def save_disease_log_and_check_recurring(request, reply_text, species, severity)
         ai_response=reply_text[:3000],
     )
 
-    # Count occurrences in last 30 days
     thirty_days_ago = timezone.now() - timedelta(days=30)
     recent_count = DiseaseLog.objects.filter(
         user=user,
@@ -220,7 +234,6 @@ def save_disease_log_and_check_recurring(request, reply_text, species, severity)
 
     is_recurring = recent_count >= 3
 
-    # Update or create DiseaseAlert
     DiseaseAlert.objects.update_or_create(
         user=user,
         disease_name=disease_name,
@@ -233,12 +246,15 @@ def save_disease_log_and_check_recurring(request, reply_text, species, severity)
     return recent_count, is_recurring
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ─────────────────────────────────────────────────────────────────────────────
 # SHARED: build Gemini message history + current parts
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ─────────────────────────────────────────────────────────────────────────────
 
 def _build_gemini_messages(types, history, images, image_data_url, image_type, user_message):
     """Build gemini_history list and current_parts list from request data."""
+    if types is None:
+        return [], []
+
     gemini_history = []
     for turn in history[-20:]:
         role = turn.get("role")
@@ -254,27 +270,40 @@ def _build_gemini_messages(types, history, images, image_data_url, image_type, u
 
     current_parts = []
 
+    # ✅ FIX: Safe Base64 decoding to prevent server crash on invalid images
     if images:
         for img_obj in images[:4]:
             raw = img_obj.get("data", "")
-            if "," in raw:
-                raw = raw.split(",", 1)[1]
+            if raw:
+                try:
+                    # Handle "data:image/jpeg;base64,xxxx" format safely
+                    raw_b64 = raw.split(",", 1)[1]
+                    decoded_bytes = base64.b64decode(raw_b64)
+                    if decoded_bytes:
+                        current_parts.append(types.Part(
+                            inline_data=types.Blob(
+                                mime_type=img_obj.get("type", "image/jpeg"),
+                                data=decoded_bytes,
+                            )
+                        ))
+                except (IndexError, ValueError, Exception):
+                    # If base64 is invalid, skip this image silently and proceed
+                    logger.warning("Failed to decode one image due to invalid base64 format.")
+                    continue
+
+    elif image_data_url:
+        try:
+            raw_b64 = image_data_url.split(",", 1)[1]
+            decoded_bytes = base64.b64decode(raw_b64)
             current_parts.append(types.Part(
                 inline_data=types.Blob(
-                    mime_type=img_obj.get("type", "image/jpeg"),
-                    data=base64.b64decode(raw),
+                    mime_type=image_type,
+                    data=decoded_bytes,
                 )
             ))
-    elif image_data_url:
-        raw_b64 = image_data_url
-        if "," in raw_b64:
-            raw_b64 = raw_b64.split(",", 1)[1]
-        current_parts.append(types.Part(
-            inline_data=types.Blob(
-                mime_type=image_type,
-                data=base64.b64decode(raw_b64),
-            )
-        ))
+        except (IndexError, ValueError, Exception):
+            logger.error("Failed to decode main image data.")
+            return [], []
 
     text_part = user_message if user_message else (
         "Please analyze this fish image carefully. Identify any disease, "
@@ -287,9 +316,9 @@ def _build_gemini_messages(types, history, images, image_data_url, image_type, u
     return gemini_history
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ─────────────────────────────────────────────────────────────────────────────
 # VIEWS
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ─────────────────────────────────────────────────────────────────────────────
 
 @login_required
 def fish_disease_agent(request):
@@ -305,10 +334,23 @@ def fish_disease_chat(request):
     Returns JSON with: reply, success, severity, is_disease,
                        disease_name, occurrence_count, recurring_alert
     """
+    # ✅ FIX: Prevent DoS attacks via large payloads (limit to 10MB)
+    # ✅ FIX: Safe content_length parsing to avoid ValueError
     try:
-        from google import genai
-        from google.genai import types
+        content_length = int(request.META.get('CONTENT_LENGTH', 0))
+    except (ValueError, TypeError):
+        content_length = 0
+    if content_length > 10 * 1024 * 1024:
+        return JsonResponse({"error": "Payload too large. Max size is 10MB."}, status=413)
 
+    # ✅ FIX: Prevent spamming via rate limiting
+    if rate_limit_check(request.user.id):
+        return JsonResponse({"error": "Too many requests. Please wait a minute."}, status=429)
+
+    if genai is None:
+        return JsonResponse({"error": "AI service is not available."}, status=503)
+
+    try:
         body           = json.loads(request.body)
         user_message   = body.get("message", "").strip()
         language       = body.get("language", "Bengali (Bangla)")
@@ -316,7 +358,6 @@ def fish_disease_chat(request):
         image_type     = body.get("image_type", "image/jpeg")
         history        = body.get("history", [])
         images         = body.get("images", [])
-        species        = body.get("species", "General")
         has_image      = bool(image_data_url) or bool(images)
 
         if not user_message and not has_image:
@@ -325,7 +366,7 @@ def fish_disease_chat(request):
             )
 
         client        = get_gemini_client()
-        system_prompt = build_system_prompt(language, species)
+        system_prompt = build_system_prompt(language, body.get("species", "General"))
         gemini_history = _build_gemini_messages(
             types, history, images, image_data_url, image_type, user_message
         )
@@ -355,11 +396,15 @@ def fish_disease_chat(request):
 
         if response is None:
             return JsonResponse(
-                {"error": "⏳ AI এখন ব্যস্ত। কিছুক্ষণ পরে আবার চেষ্টা করুন।"},
-                status=429,
+                {"error": "AI service is busy. Please try again in a few seconds."}, status=429
             )
 
-        reply = response.text
+        # ✅ FIX: Safely extract text from response
+        reply = response.text if hasattr(response, 'text') and response.text else ""
+        if not reply:
+            return JsonResponse(
+                {"error": "AI returned an empty response. Please try again."}, status=502
+            )
 
         # ── Disease analysis & logging ─────────────────────────────────────
         disease  = is_disease_reply(reply)
@@ -369,7 +414,7 @@ def fish_disease_chat(request):
 
         if disease:
             occurrence_count, recurring_alert = save_disease_log_and_check_recurring(
-                request, reply, species, severity or "low"
+                request, reply, body.get("species", "General"), severity or "low"
             )
 
         return JsonResponse({
@@ -383,12 +428,11 @@ def fish_disease_chat(request):
         })
 
     except Exception as e:
-        logger.exception(f"fish_disease_chat error: {e}")
+        logger.exception("fish_disease_chat error")
         error_msg = str(e)
         if "API_KEY" in error_msg.upper() or "authentication" in error_msg.lower():
             return JsonResponse(
-                {"error": "Google API Key is invalid. Please check your .env file."},
-                status=500,
+                {"error": "Google API Key is invalid. Please check your .env file."}, status=500,
             )
         return JsonResponse({"error": f"Server error: {error_msg}"}, status=500)
 
@@ -400,8 +444,28 @@ def fish_disease_chat_stream(request):
     Streaming chat endpoint (SSE) with model fallback.
     Words appear one by one (ChatGPT style).
     """
+    # ✅ FIX: Safe content_length parsing + proper StreamingHttpResponse return
     try:
-        from google import genai
+        content_length = int(request.META.get('CONTENT_LENGTH', 0))
+    except (ValueError, TypeError):
+        content_length = 0
+    if content_length > 10 * 1024 * 1024:
+        def _err_payload():
+            yield "data: " + json.dumps({"error": "Payload too large. Max size is 10MB."}) + "\n\n"
+        return StreamingHttpResponse(_err_payload(), content_type="text/event-stream")
+
+    # ✅ FIX: Prevent spamming via rate limiting
+    if rate_limit_check(request.user.id):
+        def _err_rate():
+            yield "data: " + json.dumps({"error": "Too many requests. Please wait a minute."}) + "\n\n"
+        return StreamingHttpResponse(_err_rate(), content_type="text/event-stream")
+
+    if genai is None:
+        def _err():
+            yield "data: " + json.dumps({"error": "AI service is not available."}) + "\n\n"
+        return StreamingHttpResponse(_err(), content_type="text/event-stream")
+
+    try:
         from google.genai import types
 
         body           = json.loads(request.body)
@@ -447,7 +511,8 @@ def fish_disease_chat_stream(request):
                 except Exception as model_err:
                     last_error = str(model_err)
                     if _is_quota_error(last_error):
-                        logger.warning(f"Quota exceeded on {model_name}, trying next.")
+                        logger.warning(f"Quota exceeded on {model_name}, trying next model.")
+                        yield "data: " + json.dumps({"rate_limit": True}) + "\n\n"
                         continue
                     # non-quota error — send error event and stop
                     yield "data: " + json.dumps({"error": last_error}) + "\n\n"
@@ -461,9 +526,10 @@ def fish_disease_chat_stream(request):
             # ── Stream chunks to client ────────────────────────────────────
             try:
                 for chunk in response_stream:
-                    if chunk.text:
-                        full_reply += chunk.text
-                        yield "data: " + json.dumps({"chunk": chunk.text}) + "\n\n"
+                    chunk_text = getattr(chunk, 'text', None)
+                    if chunk_text:
+                        full_reply += chunk_text
+                        yield "data: " + json.dumps({"chunk": chunk_text}) + "\n\n"
 
             except Exception as stream_err:
                 err_str = str(stream_err)
@@ -502,15 +568,20 @@ def fish_disease_chat_stream(request):
         return resp
 
     except Exception as e:
-        logger.exception(f"fish_disease_chat_stream error: {e}")
-        def _err():
-            yield "data: " + json.dumps({"error": str(e)}) + "\n\n"
-        return StreamingHttpResponse(_err(), content_type="text/event-stream")
+        logger.exception("fish_disease_chat_stream error")
+        error_msg = str(e)
+        if "API_KEY" in error_msg.upper() or "authentication" in error_msg.lower():
+            def _err_api():
+                yield "data: " + json.dumps({"error": "Google API Key is invalid. Please check your .env file."}) + "\n\n"
+            return StreamingHttpResponse(_err_api(), content_type="text/event-stream")
+        def _err_server():
+            yield "data: " + json.dumps({"error": f"Server error: {error_msg}"}) + "\n\n"
+        return StreamingHttpResponse(_err_server(), content_type="text/event-stream")
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # DISEASE LOG & STATS API ENDPOINTS
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 @login_required
 def disease_log_api(request):

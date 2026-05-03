@@ -1,3 +1,12 @@
+"""
+farm/serializers.py
+──────────────────
+DRF serializers for farm models.
+
+Note: Security (per-user isolation) is enforced in api_views.py via get_queryset().
+These serializers purely define how data is validated and formatted when 
+converting to/from JSON.
+"""
 from rest_framework import serializers
 
 from .models import FishBatch, GrowthRecord, Pond, WeatherRecord, FeedLog
@@ -10,6 +19,7 @@ class PondSerializer(serializers.ModelSerializer):
 
 
 class FishBatchSerializer(serializers.ModelSerializer):
+    # Exposing the @property from the FishBatch model to the API payload
     pond_name = serializers.CharField(source="pond.name", read_only=True)
     latest_biomass_kg = serializers.FloatField(read_only=True)
 
@@ -46,6 +56,7 @@ class WeatherRecordSerializer(serializers.ModelSerializer):
             "dissolved_oxygen_mg_l",
             "ph",
             "rainfall_mm",
+            "source",  # ✅ ADDED: Required to track if data came from IoT sensor, auto-estimation, or manual entry
         ]
 
 
@@ -53,4 +64,3 @@ class FeedLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = FeedLog
         fields = ["id", "batch", "date", "feed_amount_kg", "auto_calculated"]
-
