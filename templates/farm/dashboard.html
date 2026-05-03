@@ -139,15 +139,14 @@
     </div>
     <div class="card-body" style="padding:10px 14px">
 
-      {# Progress bar #}
+      {# Overall summary #}
       {% if recommended_feed_today_kg > 0 %}
-      <div style="margin-bottom:12px">
-        <div style="display:flex;justify-content:space-between;
-          font-size:11px;color:var(--muted);margin-bottom:4px">
-          <span>Feed Progress Today</span>
+      <div style="margin-bottom:14px;padding:8px 10px;background:var(--surface2);border-radius:8px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:6px">
+          <span>📦 Total Feed Progress Today</span>
           <span>{{ today_feed_given_kg }} / {{ recommended_feed_today_kg }} kg</span>
         </div>
-        <div style="height:6px;background:var(--surface2);border-radius:3px;overflow:hidden">
+        <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
           <div style="height:100%;border-radius:3px;background:var(--accent);
             width:{% widthratio today_feed_given_kg recommended_feed_today_kg 100 %}%">
           </div>
@@ -155,26 +154,50 @@
       </div>
       {% endif %}
 
-      {# Batch schedule #}
-      <div style="display:flex;flex-direction:column;gap:8px">
-        {% for batch in active_batches %}
-        <div style="display:flex;align-items:center;justify-content:space-between;
-          padding:8px 10px;background:var(--surface2);border-radius:8px;flex-wrap:wrap;gap:8px">
-          <div>
-            <span style="font-weight:600;font-size:13px">{{ batch.pond.name }}</span>
-            <span class="fs-xs text-muted" style="margin-left:6px">
-              {{ batch.get_species_display }}
-            </span>
+      {# Per-batch feed progress (FIX: each batch has its own progress bar) #}
+      <div style="display:flex;flex-direction:column;gap:10px">
+        {% for item in batch_feed_progress %}
+        <div style="padding:10px 12px;background:var(--surface2);border-radius:8px;
+          border-left:3px solid {% if item.done %}var(--accent){% elif item.given_kg > 0 %}#f59e0b{% else %}var(--border){% endif %}">
+
+          {# Batch name + status badge #}
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:4px">
+            <div>
+              <span style="font-weight:600;font-size:13px">{{ item.batch.pond.name }}</span>
+              <span class="fs-xs text-muted" style="margin-left:6px">{{ item.batch.get_species_display }}</span>
+            </div>
+            {% if item.done %}
+              <span style="font-size:10px;padding:2px 7px;border-radius:10px;background:rgba(0,229,180,.15);color:var(--accent);font-weight:600">✅ Done</span>
+            {% elif item.given_kg > 0 %}
+              <span style="font-size:10px;padding:2px 7px;border-radius:10px;background:rgba(245,158,11,.15);color:#f59e0b;font-weight:600">⏳ Partial</span>
+            {% else %}
+              <span style="font-size:10px;padding:2px 7px;border-radius:10px;background:rgba(239,68,68,.12);color:#ef4444;font-weight:600">❌ Not Fed</span>
+            {% endif %}
           </div>
-          <div style="display:flex;gap:16px;font-size:12px;flex-wrap:wrap">
-            <span>
-              🌅 Morning:
-              <strong>{{ batch.latest_biomass_kg|floatformat:2 }}</strong> kg × 60%
-            </span>
-            <span class="text-muted">
-              🌆 Evening: × 40%
-            </span>
+
+          {# Progress bar for this batch #}
+          {% if item.rec_kg > 0 %}
+          <div style="margin-bottom:6px">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px">
+              <span>Feed Progress</span>
+              <span>{{ item.given_kg }} / {{ item.rec_kg }} kg</span>
+            </div>
+            <div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden">
+              <div style="height:100%;border-radius:3px;
+                background:{% if item.done %}var(--accent){% elif item.given_kg > 0 %}#f59e0b{% else %}#ef4444{% endif %};
+                width:{% if item.rec_kg > 0 %}{% widthratio item.given_kg item.rec_kg 100 %}{% else %}0{% endif %}%">
+              </div>
+            </div>
           </div>
+          {% endif %}
+
+          {# Morning / Evening split #}
+          <div style="display:flex;gap:16px;font-size:12px;flex-wrap:wrap;color:var(--muted)">
+            <span>🌅 Morning: <strong style="color:var(--text)">{{ item.morning_kg }} kg</strong></span>
+            <span>🌆 Evening: <strong style="color:var(--text)">{{ item.evening_kg }} kg</strong></span>
+            <span>📊 Total: <strong style="color:var(--text)">{{ item.rec_kg }} kg</strong></span>
+          </div>
+
         </div>
         {% endfor %}
       </div>
@@ -429,7 +452,7 @@
       <tbody>
         {% for row in daily_feed_temp_rows %}
         <tr>
-          <td class="text-muted fs-sm">{{ row.date }}</td>
+          <td class="text-muted fs-sm">{{ row.date|date:"j F Y" }}</td>
           <td class="text-end fw-bold" style="color:var(--accent2)">{{ row.feed_kg|floatformat:2 }}</td>
           <td class="text-end text-muted">
             {% if row.recommended_feed_kg is not None %}{{ row.recommended_feed_kg|floatformat:2 }}{% else %}—{% endif %}
@@ -475,7 +498,7 @@
       <tbody>
         {% for log in recent_feed %}
         <tr>
-          <td class="text-muted fs-sm">{{ log.date }}</td>
+          <td class="text-muted fs-sm">{{ log.date|date:"j F Y" }}</td>
           <td><a href="{% url 'farm:batch_detail' log.batch.pk %}" style="color:var(--accent2)">{{ log.batch }}</a></td>
           <td class="text-end fw-bold">{{ log.feed_amount_kg }}</td>
           <td class="text-end">

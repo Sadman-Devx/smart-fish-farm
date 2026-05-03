@@ -15,69 +15,88 @@ Per-user data isolation (2026-04):
 Bug fixes (2026-04):
   Bug 1 — "Recommended (KG)" column in the 14-day table always showed "—"
   Bug 2 — "Recommended feed today" KPI always showed 0.00 kg
-
   Root cause: smart_feed_kg_for_batch(batch, day=past_date) returned None
   whenever no DailyWeather row existed for that date AND the OpenWeather
-  API key was not configured.  The dashboard loop then never accumulated
-  any value so recommended_feed_today_kg stayed at 0 and every row in
-  daily_feed_temp_rows had recommended_feed_kg=None.
-
+  API key was not configured.
   Fix:
-    1. feed_calculator.py — added a 3-level temperature fallback:
-         exact DailyWeather → most-recent DailyWeather → pond WeatherRecord → 26 °C
-    2. dashboard() — source label updated to show "Default temp (26°C)"
-       so operators know which temperature was used.
+    1. feed_calculator.py — added a 3-level temperature fallback
+    2. dashboard() — source label shows "Default temp (26°C)"
+
+  Bug 3 — profit_loss_report: feed cost was double-counted when actual
+           feed expenses existed alongside calculated feed cost.
+  Fix:     Check for recorded feed expenses first; only fall back to
+           calculated (kg × rate) when no actual expense is found.
+
+  Bug 4 — _generate_water_alerts: emails sent to all users instead of
+           only the pond owner.
+  Fix:     Pass recipient_email=pond.owner.email to send_email_notification.
+
+  Bug 5 — mortality_report: month_logs undefined for guest users.
+  Fix:     Initialise month_logs = MortalityLog.objects.none() in guest branch.
 
 Analytics additions (2026-04):
   Feature 1 — Enhanced batch_detail with growth chart + summary card
   Feature 2 — Enhanced profit/loss with expense breakdown & 6-month trends
   Feature 3 — New mortality_report view with cause breakdown & trends
 """
+import json
+import logging
 from datetime import timedelta, date
-from decimal import Decimal
-import base64
-from django.http import JsonResponse
 
-from django.db.models import Avg, Sum, Count, Q
-from django.db.models.functions import TruncDate, TruncMonth
-from django.contrib import messages
 from django.conf import settings
+from django.contrib import messages
+from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.auth.decorators import login_required
+from django.db.models import Avg, Sum
+from django.db.models.functions import TruncDate
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
-from django.contrib.auth.decorators import login_required
-import google.genai as genai
-from google.genai import types
-from .services.weather_ingest import get_weather_for_location, get_feeding_suggestion
-from .services.predictive_alerts import run_predictive_alerts, get_temperature_trend_data
-from .services.fcr_analytics import get_feed_efficiency_ranking, get_fcr_history, calculate_batch_fcr
-from .services.water_heatmap import build_water_quality_heatmap
 
-from .models import (
-    FeedLog, FeedingProfile, FeedingReminder, FishBatch,
-    GrowthRecord, Pond, WeatherRecord,
-    HarvestRecord, Expense, MortalityLog, FarmAlert, PondNote,
-)
 from . import forms
+from .models import (
+    BenchmarkRun,
+    Expense,
+    FarmAlert,
+    FeedLog,
+    FeedingReminder,
+    FishBatch,
+    GrowthRecord,
+    MortalityLog,
+    PerformanceLog,
+    Pond,
+    PondNote,
+    WeatherRecord,
+)
+from .notifications import send_email_notification
 from .services import (
     get_or_update_daily_weather,
+    ml_predict_batch_growth,
     predict_batch_growth,
     projected_avg_weight_g,
     projected_weight_gain_kg,
     smart_feed_kg_for_batch,
-    ml_predict_batch_growth,
 )
-from .services.benchmarking import (
-    run_full_benchmark, get_benchmark_stats_for_paper, benchmark_view,
+from .services.benchmarking import get_benchmark_stats_for_paper, run_full_benchmark
+from .services.fcr_analytics import (
+    calculate_batch_fcr,
+    get_feed_efficiency_ranking,
+    get_fcr_history,
+)
+from .services.predictive_alerts import (
+    get_temperature_trend_data,
+    run_predictive_alerts,
+)
+from .services.water_heatmap import build_water_quality_heatmap
+from .services.weather_ingest import (
+    get_feeding_suggestion,
+    get_weather_by_city,
+    get_weather_for_location,
 )
 from .tasks import send_daily_feed_alert
 
-from django.contrib.admin.views.decorators import staff_member_required
-from .services.benchmarking import (
-    run_full_benchmark,
-    get_benchmark_stats_for_paper,
-)
+logger = logging.getLogger(__name__)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -87,12 +106,10 @@ from .services.benchmarking import (
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _user_ponds(user):
-    """Return Ponds belonging to this user."""
     return Pond.objects.filter(owner=user)
 
 
 def _user_batches(user):
-    """Return FishBatches whose pond belongs to this user."""
     return FishBatch.objects.filter(pond__owner=user)
 
 
@@ -129,9 +146,11 @@ def _user_weather_records(user):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _generate_water_alerts(weather_record: WeatherRecord, user=None) -> None:
-    """Auto-create FarmAlert entries and send email when water readings are out of range."""
-    from .notifications import send_email_notification
+    """Auto-create FarmAlert entries and send email when water readings are out of range.
 
+    Email is sent only to the pond owner's registered email address
+    (per-user isolation fix).
+    """
     pond = weather_record.pond
     temp = float(weather_record.water_temp_c)
     do   = float(weather_record.dissolved_oxygen_mg_l)
@@ -179,7 +198,9 @@ def _generate_water_alerts(weather_record: WeatherRecord, user=None) -> None:
             "Please take immediate action to prevent fish loss.",
             "Login to AquaSmart dashboard to resolve these alerts.",
         ]
-        send_email_notification(subject, "\n".join(lines))
+        # Send only to the pond owner's own email (per-user isolation)
+        owner_email = getattr(pond.owner, "email", "") if pond.owner else ""
+        send_email_notification(subject, "\n".join(lines), recipient_email=owner_email)
 
 
 def _generate_harvest_due_alerts(user=None) -> None:
@@ -232,7 +253,6 @@ def dashboard(request):
             if fp.latitude and fp.longitude:
                 farm_weather = get_weather_for_location(float(fp.latitude), float(fp.longitude))
             elif fp.district:
-                from .services.weather_ingest import get_weather_by_city
                 location_query = f"{fp.upazila},{fp.district},BD" if fp.upazila else f"{fp.district},BD"
                 farm_weather = get_weather_by_city(location_query)
             elif fp.weather_temp_c:
@@ -353,6 +373,7 @@ def dashboard(request):
     if is_guest:
         today_feed_given_kg       = 0.0
         recommended_feed_today_kg = 0.0
+        batch_feed_progress       = []
         label                     = "No recommendation"
     else:
         today_feed_given_kg       = float(
@@ -361,6 +382,8 @@ def dashboard(request):
         recommended_feed_today_kg = 0.0
         recommended_feed_sources  = set()
 
+        # ── Per-batch feed progress (each batch tracked separately) ────────────
+        batch_feed_progress = []
         for batch in active_batches:
             suggested = smart_feed_kg_for_batch(batch, day=today)
             if suggested is not None:
@@ -372,6 +395,23 @@ def dashboard(request):
                     recommended_feed_sources.add("api")
                 else:
                     recommended_feed_sources.add("default")
+
+            # How much feed was logged for THIS batch today
+            batch_given = float(
+                FeedLog.objects.filter(batch=batch, date=today)
+                .aggregate(total=Sum("feed_amount_kg"))["total"] or 0
+            )
+            batch_recommended = round(float(suggested), 2) if suggested is not None else 0.0
+            morning_kg = round(batch_recommended * 0.6, 2)
+            evening_kg = round(batch_recommended * 0.4, 2)
+            batch_feed_progress.append({
+                "batch":      batch,
+                "given_kg":   round(batch_given, 2),
+                "rec_kg":     batch_recommended,
+                "morning_kg": morning_kg,
+                "evening_kg": evening_kg,
+                "done":       batch_given >= batch_recommended > 0,
+            })
 
         recommended_feed_today_kg = round(recommended_feed_today_kg, 2)
 
@@ -409,6 +449,7 @@ def dashboard(request):
         today_feed_given_kg=today_feed_given_kg,
         recommended_feed_today_kg=recommended_feed_today_kg,
         recommended_feed_source_label=label,
+        batch_feed_progress=batch_feed_progress,
         avg_recent_temp_c=avg_recent_temp_c,
         daily_api_temp_c=daily_api_weather.temperature_c if daily_api_weather else None,
         daily_api_condition=daily_api_weather.condition if daily_api_weather else None,
@@ -447,7 +488,7 @@ def pond_create(request):
         form = forms.PondForm(request.POST)
         if form.is_valid():
             pond = form.save(commit=False)
-            pond.owner = request.user   # ← tie to current user
+            pond.owner = request.user
             pond.save()
             messages.success(request, f"Pond '{pond.name}' created successfully.")
             return redirect("farm:pond_list")
@@ -492,7 +533,6 @@ def batch_delete(request, pk):
     return redirect("farm:pond_detail", pk=pond_pk)
 
 
-
 @login_required
 def batch_update(request, pk):
     """Update a fish batch belonging to current user."""
@@ -509,9 +549,8 @@ def batch_update(request, pk):
 
     return render(request, "farm/simple_form.html", {
         "form": form,
-        "title": "Update Fish Batch"
+        "title": "Update Fish Batch",
     })
-
 
 
 def pond_list(request):
@@ -557,18 +596,7 @@ def pond_detail(request, pk):
 # Batch detail — PUBLIC (read-only) — FEATURE 1: Enhanced with growth charts
 # ─────────────────────────────────────────────────────────────────────────────
 
-"""
-batch_detail view — updated to use ML prediction alongside formula prediction.
-
-Replace the existing batch_detail() function in farm/views.py with this one.
-Also add this import at the top of views.py:
-
-    from .services import ml_predict_batch_growth
-"""
-
 def batch_detail(request, pk):
-    from .services import ml_predict_batch_growth   # ML import
-
     is_guest = not request.user.is_authenticated
     if is_guest:
         batch = get_object_or_404(FishBatch, pk=pk)
@@ -591,7 +619,7 @@ def batch_detail(request, pk):
     # ── Formula-based prediction (original) ───────────────────────────────────
     ai_prediction = predict_batch_growth(batch, feed_kg=auto_feed_kg)
 
-    # ── ML-based prediction (new) ─────────────────────────────────────────────
+    # ── ML-based prediction ───────────────────────────────────────────────────
     try:
         ml_prediction = ml_predict_batch_growth(batch)
     except Exception:
@@ -631,100 +659,89 @@ def batch_detail(request, pk):
         form = forms.FeedLogForm(batch=batch, initial_amount_kg=auto_feed_kg) if not is_guest else None
 
     return render(request, "farm/batch_detail.html", {
-        "is_guest":                  is_guest,
-        "batch":                     batch,
-        "growth_records":            growth_records,
-        "feed_logs":                 feed_logs,
-        "latest_weather":            latest_weather,
-        "auto_feed_kg":              auto_feed_kg,
-        "assumed_fcr":               assumed_fcr,
-        "projected_gain_kg":         projected_gain_kg,
+        "is_guest":                    is_guest,
+        "batch":                       batch,
+        "growth_records":              growth_records,
+        "feed_logs":                   feed_logs,
+        "latest_weather":              latest_weather,
+        "auto_feed_kg":                auto_feed_kg,
+        "assumed_fcr":                 assumed_fcr,
+        "projected_gain_kg":           projected_gain_kg,
         "projected_next_avg_weight_g": projected_next_avg_weight_g,
-        "ai_prediction":             ai_prediction,
-        "ml_prediction":             ml_prediction,       # ← নতুন
-        "today_feed_log":            today_feed_log,
-        "feed_form":                 form,
-        "mortality_logs":            mortality_logs,
-        "total_mortality":           total_mortality,
-        "harvests":                  harvests,
-        "growth_labels":             growth_labels,
-        "growth_weight_values":      growth_weight_values,
-        "growth_count_values":       growth_count_values,
-        "starting_weight":           starting_weight,
-        "current_weight":            current_weight,
-        "weight_gain_g":             weight_gain_g,
-        "weight_gain_pct":           weight_gain_pct,
-        "survival_rate":             survival_rate,
-        "current_count":             current_count,
+        "ai_prediction":               ai_prediction,
+        "ml_prediction":               ml_prediction,
+        "today_feed_log":              today_feed_log,
+        "feed_form":                   form,
+        "mortality_logs":              mortality_logs,
+        "total_mortality":             total_mortality,
+        "harvests":                    harvests,
+        "growth_labels":               growth_labels,
+        "growth_weight_values":        growth_weight_values,
+        "growth_count_values":         growth_count_values,
+        "starting_weight":             starting_weight,
+        "current_weight":              current_weight,
+        "weight_gain_g":               weight_gain_g,
+        "weight_gain_pct":             weight_gain_pct,
+        "survival_rate":               survival_rate,
+        "current_count":               current_count,
     })
 
-# ── Benchmark Dashboard ───────────────────────────────────────────────────────
-@login_required
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Benchmark Dashboard — STAFF ONLY
+# ─────────────────────────────────────────────────────────────────────────────
+
+@staff_member_required
 def benchmark_dashboard(request):
     """
     Performance benchmarking dashboard for research paper data collection.
-    Shows response times, DB query counts, memory usage, and ML timing.
+    Only Django superuser / staff can access.
     """
-    from .services.benchmarking import get_benchmark_stats_for_paper
- 
-    stats = get_benchmark_stats_for_paper()
- 
-    # Recent performance logs (last 100)
-    from .models import PerformanceLog, BenchmarkRun
-    recent_logs  = PerformanceLog.objects.order_by("-created_at")[:100]
-    recent_runs  = BenchmarkRun.objects.order_by("-created_at")[:5]
- 
+    stats       = get_benchmark_stats_for_paper()
+    recent_logs = PerformanceLog.objects.order_by("-created_at")[:100]
+    recent_runs = BenchmarkRun.objects.order_by("-created_at")[:5]
+
     return render(request, "farm/benchmark_dashboard.html", {
         "stats":       stats,
         "recent_logs": recent_logs,
         "recent_runs": recent_runs,
         "page_title":  "Performance Benchmarking",
     })
- 
- 
+
+
+@staff_member_required
 @require_POST
-@login_required
 def run_benchmark_view(request):
-    """
-    Trigger a full benchmark suite run.
-    POST /benchmark/run/
-    """
-    from .services.benchmarking import run_full_benchmark
- 
+    """Trigger a full benchmark suite run — admin only."""
     try:
         n_iter = int(request.POST.get("iterations", 10))
-        n_iter = max(3, min(n_iter, 50))   # clamp 3–50
- 
-        suite  = run_full_benchmark(n_iterations=n_iter)
+        n_iter = max(3, min(n_iter, 50))  # clamp 3–50
+
+        suite = run_full_benchmark(n_iterations=n_iter)
         messages.success(
             request,
             f"✅ Benchmark complete — {len(suite.results)} operations measured. "
-            f"Avg response: {suite.summary.get('avg_response_ms', 0):.1f}ms"
+            f"Avg response: {suite.summary.get('avg_response_ms', 0):.1f} ms",
         )
     except Exception as e:
         messages.error(request, f"Benchmark failed: {e}")
- 
+
     return redirect("farm:benchmark_dashboard")
- 
- 
-@login_required
+
+
+@staff_member_required
 def benchmark_export_json(request):
-    """Export all benchmark data as JSON for paper analysis."""
-    import json
-    from django.http import JsonResponse
-    from .models import PerformanceLog, BenchmarkRun
- 
-    logs = list(PerformanceLog.objects.values())
-    runs = list(BenchmarkRun.objects.values())
- 
+    """Export all benchmark data as JSON for paper analysis — admin only."""
     data = {
-        "performance_logs": logs,
-        "benchmark_runs":   runs,
+        "performance_logs": list(PerformanceLog.objects.values()),
+        "benchmark_runs":   list(BenchmarkRun.objects.values()),
         "exported_at":      timezone.now().isoformat(),
     }
     response = JsonResponse(data, safe=False, json_dumps_params={"indent": 2})
     response["Content-Disposition"] = 'attachment; filename="aquasmart_benchmark.json"'
     return response
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Read-only report views — PUBLIC
 # ─────────────────────────────────────────────────────────────────────────────
@@ -738,7 +755,7 @@ def reminder_list(request):
 
 
 def daily_feed_report(request):
-    today   = timezone.now().date()
+    today = timezone.now().date()
     if not request.user.is_authenticated:
         return render(request, "farm/daily_feed_report.html", {"today": today, "rows": [], "is_guest": True})
     user    = request.user
@@ -761,7 +778,7 @@ def daily_feed_report(request):
 
 def harvest_list(request):
     is_guest = not request.user.is_authenticated
-    harvests  = _user_harvests(request.user).select_related("batch__pond") if not is_guest else HarvestRecord.objects.none()
+    harvests = _user_harvests(request.user).select_related("batch__pond") if not is_guest else HarvestRecord.objects.none()
     total_rev = sum(h.gross_revenue for h in harvests)
     total_kg  = harvests.aggregate(kg=Sum("total_weight_kg"))["kg"] or 0
     return render(request, "farm/harvest_list.html", {
@@ -776,9 +793,7 @@ def expense_list(request):
     is_guest = not request.user.is_authenticated
     expenses = _user_expenses(request.user).select_related("pond") if not is_guest else Expense.objects.none()
     total    = expenses.aggregate(t=Sum("amount"))["t"] or 0
-    by_cat   = (
-        expenses.values("category").annotate(total=Sum("amount")).order_by("-total")
-    )
+    by_cat   = expenses.values("category").annotate(total=Sum("amount")).order_by("-total")
     return render(request, "farm/expense_list.html", {
         "is_guest": is_guest,
         "expenses": expenses,
@@ -788,8 +803,8 @@ def expense_list(request):
 
 
 def alert_list(request):
-    is_guest         = not request.user.is_authenticated
-    show_resolved    = request.GET.get("resolved") == "1"
+    is_guest      = not request.user.is_authenticated
+    show_resolved = request.GET.get("resolved") == "1"
     if is_guest:
         alerts           = FarmAlert.objects.none()
         unresolved_count = 0
@@ -804,11 +819,17 @@ def alert_list(request):
     })
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# FEATURE 2: Enhanced Profit/Loss — PUBLIC (read-only)
+# ─────────────────────────────────────────────────────────────────────────────
+
 def profit_loss_report(request):
     """
-    FEATURE 2: Enhanced profit/loss report.
-    FIX: `user` was referenced inside the `else` branch but never assigned,
-    causing a NameError for every authenticated visitor.
+    Enhanced profit/loss report with:
+    - Actual-vs-calculated feed cost (no double-counting)
+    - Expense breakdown doughnut chart
+    - 6-month revenue/cost trend
+    - Combined transaction list
     """
     is_guest  = not request.user.is_authenticated
     today     = timezone.now().date()
@@ -817,13 +838,12 @@ def profit_loss_report(request):
         year, month = int(month_str.split("-")[0]), int(month_str.split("-")[1])
     except Exception:
         year, month = today.year, today.month
- 
+
     start = date(year, month, 1)
     end   = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
- 
-    # FIX: define user here, before it is used in either branch
+
     user = request.user if not is_guest else None
- 
+
     if is_guest:
         harvests_qs   = HarvestRecord.objects.none()
         revenue       = 0
@@ -840,29 +860,44 @@ def profit_loss_report(request):
         total_expense = float(expenses_qs.aggregate(t=Sum("amount"))["t"] or 0)
         feed_qs       = _user_feed_logs(user).filter(date__gte=start, date__lt=end)
         feed_kg       = float(feed_qs.aggregate(kg=Sum("feed_amount_kg"))["kg"] or 0)
- 
+
     feed_cost_per_kg = float(getattr(settings, "FEED_COST_PER_KG", 1.2))
-    feed_cost     = round(feed_kg * feed_cost_per_kg, 2)
-    total_cost    = round(total_expense + feed_cost, 2)
-    net_profit    = round(revenue - total_cost, 2)
-    margin_pct    = round((net_profit / revenue * 100) if revenue > 0 else 0, 1)
- 
-    by_category   = list(
+
+    # ── Feed cost: prefer actual recorded expense, fall back to calculation ──
+    feed_expense = float(
+        expenses_qs.filter(category="feed").aggregate(t=Sum("amount"))["t"] or 0
+    )
+    if feed_expense > 0:
+        feed_cost_label = "Feed (actual)"
+        feed_cost_meta  = "Purchase expense recorded"
+        feed_cost       = round(feed_expense, 2)
+        other_expense   = round(total_expense - feed_expense, 2)
+    else:
+        feed_cost_label = "Feed (calculated)"
+        feed_cost_meta  = f"{feed_kg:.1f} kg consumed"
+        feed_cost       = round(feed_kg * feed_cost_per_kg, 2)
+        other_expense   = total_expense
+
+    total_cost = round(other_expense + feed_cost, 2)
+    net_profit = round(revenue - total_cost, 2)
+    margin_pct = round((net_profit / revenue * 100) if revenue > 0 else 0, 1)
+
+    by_category = list(
         expenses_qs.values("category")
         .annotate(total=Sum("amount"))
         .order_by("-total")
     )
- 
-    # ── Expense doughnut chart data ───────────────────────────────────────────
+
+    # ── Expense doughnut chart data (avoid double-counting feed) ──────────────
     expense_cat_labels = []
     expense_cat_values = []
-    if feed_cost > 0:
+    if feed_expense <= 0 and feed_cost > 0:
         expense_cat_labels.append("Feed (calculated)")
         expense_cat_values.append(round(feed_cost, 2))
     for row in by_category:
         expense_cat_labels.append(row["category"].replace("_", " ").title())
         expense_cat_values.append(round(float(row["total"]), 2))
- 
+
     # ── 6-month trend data ────────────────────────────────────────────────────
     monthly_trend = []
     if not is_guest:
@@ -873,31 +908,40 @@ def profit_loss_report(request):
                 if m_start.month == 12
                 else date(m_start.year, m_start.month + 1, 1)
             )
-            m_rev   = sum(
+            m_rev = sum(
                 h.gross_revenue for h in
                 _user_harvests(user).filter(harvest_date__gte=m_start, harvest_date__lt=m_end)
             )
-            m_exp   = float(
+            m_feed_exp = float(
                 _user_expenses(user)
-                .filter(date__gte=m_start, date__lt=m_end)
+                .filter(date__gte=m_start, date__lt=m_end, category="feed")
                 .aggregate(t=Sum("amount"))["t"] or 0
             )
-            m_feed_kg = float(
-                _user_feed_logs(user)
+            m_other_exp = float(
+                _user_expenses(user)
                 .filter(date__gte=m_start, date__lt=m_end)
-                .aggregate(kg=Sum("feed_amount_kg"))["kg"] or 0
+                .exclude(category="feed")
+                .aggregate(t=Sum("amount"))["t"] or 0
             )
-            m_feed_cost = round(m_feed_kg * feed_cost_per_kg, 2)
-            m_cost  = round(m_exp + m_feed_cost, 2)
+            if m_feed_exp > 0:
+                m_feed_cost = round(m_feed_exp, 2)
+            else:
+                m_feed_kg = float(
+                    _user_feed_logs(user)
+                    .filter(date__gte=m_start, date__lt=m_end)
+                    .aggregate(kg=Sum("feed_amount_kg"))["kg"] or 0
+                )
+                m_feed_cost = round(m_feed_kg * feed_cost_per_kg, 2)
+            m_cost = round(m_other_exp + m_feed_cost, 2)
             monthly_trend.append({
                 "label":     m_start.strftime("%b %Y"),
                 "revenue":   round(m_rev, 2),
                 "cost":      m_cost,
                 "profit":    round(m_rev - m_cost, 2),
                 "feed_cost": m_feed_cost,
-                "other_exp": round(m_exp, 2),
+                "other_exp": round(m_other_exp, 2),
             })
- 
+
     # ── Combined transaction list ─────────────────────────────────────────────
     transactions = []
     for h in harvests_qs:
@@ -917,27 +961,31 @@ def profit_loss_report(request):
             "sign":        "−",
         })
     transactions.sort(key=lambda x: x["date"], reverse=True)
- 
+
     return render(request, "farm/profit_loss.html", {
-        "is_guest":          is_guest,
-        "month_str":         month_str,
-        "start":             start,
-        "end":               end,
-        "harvests":          harvests_qs,
-        "expenses":          expenses_qs,
-        "revenue":           round(revenue, 2),
-        "feed_cost":         feed_cost,
-        "feed_kg":           round(feed_kg, 2),
-        "total_expense":     total_expense,
-        "total_cost":        total_cost,
-        "net_profit":        net_profit,
-        "margin_pct":        margin_pct,
-        "by_category":       by_category,
-        "monthly_trend":     monthly_trend,
+        "is_guest":           is_guest,
+        "month_str":          month_str,
+        "start":              start,
+        "end":                end,
+        "harvests":           harvests_qs,
+        "expenses":           expenses_qs,
+        "revenue":            round(revenue, 2),
+        "feed_cost":          feed_cost,
+        "feed_cost_label":    feed_cost_label,
+        "feed_cost_meta":     feed_cost_meta,
+        "feed_kg":            round(feed_kg, 2),
+        "total_expense":      total_expense,
+        "other_expense":      other_expense,
+        "total_cost":         total_cost,
+        "net_profit":         net_profit,
+        "margin_pct":         margin_pct,
+        "by_category":        by_category,
+        "monthly_trend":      monthly_trend,
         "expense_cat_labels": expense_cat_labels,
         "expense_cat_values": expense_cat_values,
-        "transactions":      transactions,
+        "transactions":       transactions,
     })
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # FEATURE 3: Mortality Report — PUBLIC (read-only)
@@ -961,9 +1009,11 @@ def mortality_report(request):
     start = date(year, month, 1)
     end   = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
 
-    # ── All mortality logs (for full table) ───────────────────────────────────
     is_guest = not request.user.is_authenticated
     user     = request.user if not is_guest else None
+
+    # FIX: initialise month_logs for both branches to prevent NameError for guests
+    month_logs = MortalityLog.objects.none()
 
     if is_guest:
         all_logs           = MortalityLog.objects.none()
@@ -975,10 +1025,10 @@ def mortality_report(request):
             .select_related("batch__pond")
             .order_by("-date")
         )
-        # ── This month's logs ─────────────────────────────────────────────────
         month_logs = all_logs.filter(date__gte=start, date__lt=end)
         total_deaths_month = month_logs.aggregate(t=Sum("count"))["t"] or 0
         total_initial      = _user_batches(user).aggregate(t=Sum("initial_count"))["t"] or 1
+
     mortality_rate_pct = round(total_deaths_month / total_initial * 100, 2) if total_initial else 0
 
     # Most common cause this month
@@ -998,8 +1048,8 @@ def mortality_report(request):
         cause_values.append(row["total"])
 
     # ── Monthly trend (last 6 months) ─────────────────────────────────────────
-    trend_labels  = []
-    trend_values  = []
+    trend_labels    = []
+    trend_values    = []
     pond_breakdown  = []
     all_cause_agg   = []
     total_deaths_all = 0
@@ -1012,14 +1062,12 @@ def mortality_report(request):
             trend_labels.append(m_start.strftime("%b %Y"))
             trend_values.append(deaths)
 
-        # ── Deaths by pond (for additional breakdown) ─────────────────────────
         pond_breakdown = (
             month_logs.values("batch__pond__name")
             .annotate(total=Sum("count"))
             .order_by("-total")
         )
 
-        # ── All-time totals by cause ───────────────────────────────────────────
         all_cause_agg = (
             all_logs.values("cause")
             .annotate(total=Sum("count"))
@@ -1028,23 +1076,23 @@ def mortality_report(request):
         total_deaths_all = all_logs.aggregate(t=Sum("count"))["t"] or 0
 
     return render(request, "farm/mortality_report.html", {
-        "is_guest": is_guest,
-        "month_str": month_str,
-        "start": start,
-        "end": end,
-        "total_deaths_month": total_deaths_month,
-        "mortality_rate_pct": mortality_rate_pct,
+        "is_guest":                is_guest,
+        "month_str":               month_str,
+        "start":                   start,
+        "end":                     end,
+        "total_deaths_month":      total_deaths_month,
+        "mortality_rate_pct":      mortality_rate_pct,
         "most_common_cause_label": most_common_cause_label,
-        "cause_labels": cause_labels,
-        "cause_values": cause_values,
-        "trend_labels": trend_labels,
-        "trend_values": trend_values,
-        "all_logs": all_logs,
-        "month_logs": month_logs,
-        "pond_breakdown": pond_breakdown,
-        "all_cause_agg": all_cause_agg,
-        "total_deaths_all": total_deaths_all,
-        "cause_choices": MortalityLog.CAUSE_CHOICES,
+        "cause_labels":            cause_labels,
+        "cause_values":            cause_values,
+        "trend_labels":            trend_labels,
+        "trend_values":            trend_values,
+        "all_logs":                all_logs,
+        "month_logs":              month_logs,
+        "pond_breakdown":          pond_breakdown,
+        "all_cause_agg":           all_cause_agg,
+        "total_deaths_all":        total_deaths_all,
+        "cause_choices":           MortalityLog.CAUSE_CHOICES,
     })
 
 
@@ -1115,7 +1163,11 @@ def expense_create(request):
             return redirect("farm:expense_list")
     else:
         form = forms.ExpenseForm(user=request.user)
-    return render(request, "farm/simple_form.html", {"form": form, "title": "Add Expense"})
+    return render(request, "farm/simple_form.html", {
+        "form": form,
+        "title": "Add Expense",
+        "subtitle": "Record actual feed, transport, doctor and other farm expenses here.",
+    })
 
 
 @login_required
@@ -1144,7 +1196,6 @@ def mortality_create(request):
 @require_POST
 @login_required
 def alert_resolve(request, pk):
-    # Ensure the alert belongs to this user's pond
     alert = get_object_or_404(FarmAlert, pk=pk, pond__owner=request.user)
     alert.resolve()
     messages.success(request, "Alert resolved.")
@@ -1168,21 +1219,16 @@ def send_test_alert(request):
 @login_required
 def refresh_weather_view(request):
     try:
-        from farm.models import FarmProfile
-        from .services.weather_ingest import get_weather_for_location, get_weather_by_city
         fp = request.user.farm_profile
         data = None
 
         if fp.latitude and fp.longitude:
-            data = get_weather_for_location(
-                float(fp.latitude), float(fp.longitude)
-            )
+            data = get_weather_for_location(float(fp.latitude), float(fp.longitude))
         elif fp.district:
             location_query = f"{fp.upazila},{fp.district},BD" if fp.upazila else f"{fp.district},BD"
             data = get_weather_by_city(location_query)
 
         if data:
-            from django.utils import timezone
             fp.weather_temp_c       = data["temp_c"]
             fp.weather_humidity_pct = data["humidity"]
             fp.weather_rain_mm      = data["rain_mm"]
@@ -1213,65 +1259,11 @@ def mark_feeding_done_view(request):
             messages.success(request, "Feeding marked as done!")
     return redirect("farm:dashboard")
 
-@staff_member_required
-def benchmark_dashboard(request):
-    """
-    Performance benchmarking dashboard.
-    শুধু Django superuser / staff দেখতে পারবে।
-    Regular user চেষ্টা করলে → admin login page এ redirect হবে।
-    """
-    from .services.benchmarking import get_benchmark_stats_for_paper
-    from .models import PerformanceLog, BenchmarkRun
- 
-    stats       = get_benchmark_stats_for_paper()
-    recent_logs = PerformanceLog.objects.order_by("-created_at")[:100]
-    recent_runs = BenchmarkRun.objects.order_by("-created_at")[:5]
- 
-    return render(request, "farm/benchmark_dashboard.html", {
-        "stats":       stats,
-        "recent_logs": recent_logs,
-        "recent_runs": recent_runs,
-    })
- 
- 
-@staff_member_required
-@require_POST
-def run_benchmark_view(request):
-    """Benchmark suite চালাও — admin only।"""
-    from .services.benchmarking import run_full_benchmark
- 
-    try:
-        n_iter = int(request.POST.get("iterations", 10))
-        n_iter = max(3, min(n_iter, 50))
-        suite  = run_full_benchmark(n_iterations=n_iter)
-        messages.success(
-            request,
-            f"✅ Benchmark complete — {len(suite.results)} operations measured. "
-            f"Avg response: {suite.summary.get('avg_response_ms', 0):.1f} ms"
-        )
-    except Exception as e:
-        messages.error(request, f"Benchmark failed: {e}")
- 
-    return redirect("farm:benchmark_dashboard")
- 
- 
-@staff_member_required
-def benchmark_export_json(request):
-    """Benchmark data JSON হিসেবে export করো — admin only।"""
-    from django.http import JsonResponse
-    from .models import PerformanceLog, BenchmarkRun
- 
-    data = {
-        "performance_logs": list(PerformanceLog.objects.values()),
-        "benchmark_runs":   list(BenchmarkRun.objects.values()),
-        "exported_at":      timezone.now().isoformat(),
-    }
-    response = JsonResponse(data, safe=False, json_dumps_params={"indent": 2})
-    response["Content-Disposition"] = 'attachment; filename="aquasmart_benchmark.json"'
-    return response
 
-# ── Analytics Dashboard ───────────────────────────────────────────────────────
- 
+# ─────────────────────────────────────────────────────────────────────────────
+# Analytics Dashboard
+# ─────────────────────────────────────────────────────────────────────────────
+
 @login_required
 def analytics_dashboard(request):
     """
@@ -1280,34 +1272,21 @@ def analytics_dashboard(request):
       2. FCR Analytics     — feed efficiency ranking & history
       3. Water Quality Heatmap — 7-day multi-pond heatmap
     """
-    from .services.predictive_alerts import (
-        run_predictive_alerts,
-        get_temperature_trend_data,
-    )
-    from .services.fcr_analytics import (
-        get_feed_efficiency_ranking,
-        get_fcr_history,
-        calculate_batch_fcr,
-    )
-    from .services.water_heatmap import build_water_quality_heatmap
-    import json
- 
     user = request.user
- 
+
     # ── 1. Run predictive alerts ──────────────────────────────────────────────
     new_alerts_count = 0
     try:
         new_alerts_count = run_predictive_alerts(user=user)
     except Exception as e:
-        logger.warning(f"[Analytics] Predictive alert error: {e}")
- 
-    # Get all unresolved predictive alerts for this user
+        logger.warning("[Analytics] Predictive alert error: %s", e)
+
     predictive_alerts = (
         _user_alerts(user)
         .filter(resolved=False, message__contains="PREDICTIVE")
         .order_by("-created_at")[:20]
     )
- 
+
     # ── 2. Temperature trend for each pond ────────────────────────────────────
     ponds = _user_ponds(user)
     temp_trends = []
@@ -1320,38 +1299,34 @@ def analytics_dashboard(request):
                 temp_trends.append(trend)
         except Exception:
             pass
- 
+
     # ── 3. FCR Analytics ──────────────────────────────────────────────────────
     fcr_ranking = []
     try:
         fcr_ranking = get_feed_efficiency_ranking(user=user)
     except Exception as e:
-        logger.warning(f"[Analytics] FCR ranking error: {e}")
- 
-    # FCR history for the best batch (lowest FCR)
+        logger.warning("[Analytics] FCR ranking error: %s", e)
+
     fcr_history_data = None
     best_batch       = None
     if fcr_ranking:
         try:
-            from .models import FishBatch
             best_batch_id = fcr_ranking[0]["batch_id"]
             best_batch    = FishBatch.objects.get(pk=best_batch_id)
-            from .services.fcr_analytics import get_fcr_history
             fcr_history_data = get_fcr_history(best_batch, weeks=8)
         except Exception as e:
-            logger.warning(f"[Analytics] FCR history error: {e}")
- 
+            logger.warning("[Analytics] FCR history error: %s", e)
+
     # ── 4. Water Quality Heatmap ──────────────────────────────────────────────
     heatmap_data = {}
     try:
         heatmap_data = build_water_quality_heatmap(user=user, days=7)
     except Exception as e:
-        logger.warning(f"[Analytics] Heatmap error: {e}")
- 
+        logger.warning("[Analytics] Heatmap error: %s", e)
+
     # ── Prepare JSON for template ─────────────────────────────────────────────
     temp_trend_json = {}
     if temp_trends:
-        # Use first pond's trend for main chart
         t = temp_trends[0]
         temp_trend_json = {
             "labels":        t["labels"] + t.get("proj_labels", []),
@@ -1363,7 +1338,7 @@ def analytics_dashboard(request):
             "slope":         t.get("slope", 0),
             "pond_name":     t.get("pond_name", ""),
         }
- 
+
     fcr_chart_json = {}
     if fcr_history_data and fcr_history_data.get("has_data"):
         fcr_chart_json = {
@@ -1374,64 +1349,58 @@ def analytics_dashboard(request):
             "benchmark_high": fcr_history_data["benchmark_high"],
             "species":        fcr_history_data["species"],
         }
- 
+
     return render(request, "farm/analytics_dashboard.html", {
         # Predictive alerts
         "predictive_alerts":  predictive_alerts,
         "new_alerts_count":   new_alerts_count,
         "temp_trends":        temp_trends,
         "temp_trend_json":    json.dumps(temp_trend_json),
- 
+
         # FCR analytics
         "fcr_ranking":        fcr_ranking,
         "fcr_history_data":   fcr_history_data,
         "fcr_chart_json":     json.dumps(fcr_chart_json),
         "best_batch":         best_batch,
- 
+
         # Heatmap
         "heatmap_data":       heatmap_data,
         "heatmap_json":       json.dumps(heatmap_data, default=str),
- 
+
         # Summary
         "total_ponds":        ponds.count(),
         "total_batches":      _user_batches(user).count(),
     })
- 
- 
+
+
 # ── FCR detail for a single batch ─────────────────────────────────────────────
- 
+
 @login_required
 def fcr_batch_detail(request, pk):
     """FCR history chart for a specific batch — AJAX JSON response."""
-    from django.http import JsonResponse
-    from .services.fcr_analytics import get_fcr_history, calculate_batch_fcr
- 
     batch = get_object_or_404(FishBatch, pk=pk, pond__owner=request.user)
- 
+
     fcr_data     = calculate_batch_fcr(batch)
     history_data = get_fcr_history(batch, weeks=8)
- 
+
     return JsonResponse({
-        "fcr_data":    fcr_data,
-        "history":     history_data,
-        "batch_name":  str(batch),
+        "fcr_data":   fcr_data,
+        "history":    history_data,
+        "batch_name": str(batch),
     })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PWA views
+# ─────────────────────────────────────────────────────────────────────────────
 
 def offline_view(request):
     """PWA offline fallback page."""
     return render(request, "pwa/offline.html")
- 
- 
+
+
 def manifest_view(request):
-    """
-    Serve manifest.json dynamically so we can use Django's
-    static URL in icon paths if needed.
-    """
-    import json
-    from django.conf import settings as dj_settings
-    from django.contrib.staticfiles.storage import staticfiles_storage
- 
-    with open(dj_settings.BASE_DIR / "static" / "pwa" / "manifest.json") as f:
+    """Serve manifest.json dynamically."""
+    with open(settings.BASE_DIR / "static" / "pwa" / "manifest.json") as f:
         manifest = json.load(f)
- 
     return JsonResponse(manifest)

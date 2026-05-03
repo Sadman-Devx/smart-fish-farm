@@ -218,6 +218,8 @@ class HarvestRecord(models.Model):
 class Expense(models.Model):
     CATEGORY_CHOICES = [
         ("feed", "Feed"),
+        ("transport", "Transport"),
+        ("doctor", "Veterinarian / Doctor"),
         ("medicine", "Medicine / Treatment"),
         ("labour", "Labour"),
         ("equipment", "Equipment"),

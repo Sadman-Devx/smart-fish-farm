@@ -331,6 +331,17 @@ class AuthenticatedWriteTests(TestCase):
         self.assertIn(resp.status_code, [302])
         self.assertTrue(Expense.objects.exists())
 
+    def test_authenticated_can_log_transport_expense(self):
+        url  = reverse("farm:expense_create")
+        resp = self.client.post(url, {
+            "date": date.today().isoformat(),
+            "category": "transport",
+            "amount": "750.00",
+            "description": "Fuel for feed delivery",
+        })
+        self.assertIn(resp.status_code, [302])
+        self.assertTrue(Expense.objects.filter(category="transport").exists())
+
     def test_authenticated_can_log_mortality(self):
         url  = reverse("farm:mortality_create")
         resp = self.client.post(url, {

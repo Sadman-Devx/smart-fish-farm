@@ -31,16 +31,21 @@
   <link rel="apple-touch-icon" sizes="512x512" href="{% static 'pwa/icons/icon-512x512.png' %}">
 
   {# ── Favicon ── #}
-  <link rel="icon" type="image/png" sizes="32x32" 
+  <link rel="icon" type="image/png" sizes="32x32"
         href="{% static 'pwa/icons/favicon-32x32.png' %}">
-  <link rel="shortcut icon" 
+  <link rel="shortcut icon"
         href="{% static 'pwa/icons/favicon-32x32.png' %}">
 
   {# ── Fonts & CSS ── #}
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <link rel="preload"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  </noscript>
+  <link rel="stylesheet" href="{% static 'css/styles.min.css' %}">
 
   <style>
     .guest-banner {
@@ -67,13 +72,17 @@
     .guest-banner a.gb-btn:hover { opacity: .8; }
     .gb-login  { background: transparent; border-color: var(--accent2); color: var(--accent2) !important; }
     .gb-signup { background: var(--accent); border-color: var(--accent); color: #0a1628 !important; }
-
-    /* Standalone mode — hide browser UI hints */
     [data-pwa="standalone"] .guest-banner { padding-top: 14px; }
+    .sidebar-logo img {
+      filter: brightness(0) invert(1) sepia(1) saturate(2) hue-rotate(130deg) !important;
+    }
+    [data-theme="light"] .sidebar-logo img { filter: none !important; }
   </style>
+
   {% block extra_head %}{% endblock %}
 </head>
 <body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
 
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
@@ -81,10 +90,28 @@
 
   <!-- ── Sidebar ──────────────────────────────────────── -->
   <aside class="sidebar" id="sidebar">
-    <div class="sidebar-logo">
-      <div class="logo-mark">🐟</div>
-      <div class="logo-name">AquaSmart</div>
-      <div class="logo-sub">Fish Farm Management</div>
+    <div class="sidebar-logo" style="
+      padding: 16px 12px 10px;
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;">
+      <img
+        src="{% static 'pwa/icons/image.png' %}"
+        alt="AquaSmart Fish Farm Management"
+        width="165"
+        height="55"
+        style="height:auto;width:75%;object-fit:contain;
+               filter:drop-shadow(0 0 8px rgba(80,83,83,0.6))
+                      drop-shadow(0 0 2px rgba(255,255,255,0.3)) !important;"
+      >
+      <div class="logo-sub" style="text-align:center;margin-top:4px;color:var(--accent);">
+        Fish Farm Management
+      </div>
     </div>
 
     <nav class="sidebar-nav">
@@ -175,7 +202,6 @@
         <span class="nav-icon">🔔</span> Reminders
       </a>
 
-      {# ── Analytics — authenticated users only ── #}
       {% if request.user.is_authenticated %}
       <a href="{% url 'farm:analytics_dashboard' %}"
          class="nav-item {% block nav_analytics %}{% endblock %}">
@@ -189,7 +215,6 @@
         <span class="nav-icon">🐟</span> Fish Doctor
       </a>
 
-      {# ── Admin only ── #}
       {% if request.user.is_staff or request.user.is_superuser %}
       <div class="nav-section">Admin Tools</div>
       <a href="{% url 'farm:benchmark_dashboard' %}"
@@ -262,7 +287,7 @@
   </aside>
 
   <!-- ── Main ─────────────────────────────────────────── -->
-  <div class="main">
+  <main class="main" id="main-content">
 
     {# ── Guest banner ── #}
     {% if not request.user.is_authenticated %}
@@ -283,14 +308,16 @@
       <div class="topbar-left">
         <button class="hamburger" id="hamburgerBtn" aria-label="Toggle menu">☰</button>
         <span class="topbar-title">{% block topbar_title %}Dashboard{% endblock %}</span>
-        <span class="indicator"></span>
+        <span class="indicator" aria-hidden="true"></span>
         <span class="fs-xs text-muted">Live</span>
       </div>
 
       <div class="topbar-actions">
         <button id="theme-toggle" class="btn btn-outline"
-                style="font-size:16px;padding:5px 10px;" title="Toggle Theme">
-          <span id="theme-icon">☀️</span>
+                style="font-size:16px;padding:5px 10px;"
+                title="Toggle Theme"
+                aria-label="Toggle light/dark theme">
+          <span id="theme-icon" aria-hidden="true">☀️</span>
         </button>
         {% block topbar_actions %}
           <a href="{% url 'farm:alert_list' %}"
@@ -312,7 +339,8 @@
               <span style="width:22px;height:22px;border-radius:50%;
                            background:linear-gradient(135deg,var(--accent),var(--accent2));
                            display:inline-flex;align-items:center;justify-content:center;
-                           font-size:10px;font-weight:700;color:#0a1628;flex-shrink:0">
+                           font-size:10px;font-weight:700;color:#0a1628;flex-shrink:0"
+                    aria-hidden="true">
                 {{ request.user.avatar_initials|default:"?" }}
               </span>
               {{ request.user.display_name|default:request.user.email|truncatechars:18 }}
@@ -330,7 +358,7 @@
 
       {# ── Django messages ── #}
       {% if messages %}
-        <div class="messages-wrap">
+        <div class="messages-wrap" role="alert" aria-live="polite">
           {% for message in messages %}
             <div class="message-alert {{ message.tags|default:'info' }}">
               {% if message.tags == 'success' %}✓
@@ -339,6 +367,7 @@
               {% endif %}
               {{ message }}
               <button class="message-close"
+                      aria-label="Close message"
                       onclick="this.parentElement.remove()">×</button>
             </div>
           {% endfor %}
@@ -347,35 +376,35 @@
 
       {% block content %}{% endblock %}
     </div>
-  </div>
 
+  </main>
 </div><!-- /.shell -->
 
-<script>
-(function () {
+<script defer>
+document.addEventListener("DOMContentLoaded", function () {
   var btn     = document.getElementById('hamburgerBtn');
   var sidebar = document.getElementById('sidebar');
   var overlay = document.getElementById('sidebarOverlay');
-  function close() {
+  function closeSidebar() {
     sidebar.classList.remove('open');
     overlay.classList.remove('open');
   }
   function toggle() {
     sidebar.classList.contains('open')
-      ? close()
+      ? closeSidebar()
       : (sidebar.classList.add('open'), overlay.classList.add('open'));
   }
   if (btn)     btn.addEventListener('click', toggle);
-  if (overlay) overlay.addEventListener('click', close);
+  if (overlay) overlay.addEventListener('click', closeSidebar);
   document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') close();
+    if (e.key === 'Escape') closeSidebar();
   });
-})();
+});
 </script>
 
 {% block extra_scripts %}{% endblock %}
 
-<script>
+<script defer>
 document.addEventListener("DOMContentLoaded", function() {
   var toggleBtn = document.getElementById('theme-toggle');
   var themeIcon = document.getElementById('theme-icon');

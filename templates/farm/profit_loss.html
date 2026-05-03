@@ -14,7 +14,7 @@
 <div class="page-header mb-16">
   <div>
     <h1>Profit & Loss Report</h1>
-    <p>Financial summary for {{ start|date:"F Y" }}</p>
+    <p>Financial summary for {{ start|date:"F Y" }}. Record actual feed purchases as Feed expenses to use actual cost.</p>
   </div>
   <form method="get" style="display:flex;align-items:center;gap:8px">
     <input type="month" name="month" value="{{ month_str }}"
@@ -32,13 +32,13 @@
     <div class="kpi-meta">From {{ harvests.count }} harvest event{{ harvests.count|pluralize }}</div>
   </div>
   <div class="kpi-card k-orange">
-    <div class="kpi-label">Feed Cost</div>
+    <div class="kpi-label">{{ feed_cost_label }}</div>
     <div class="kpi-value">৳ {{ feed_cost|floatformat:0 }}</div>
-    <div class="kpi-meta">{{ feed_kg|floatformat:1 }} kg consumed</div>
+    <div class="kpi-meta">{{ feed_cost_meta }}</div>
   </div>
   <div class="kpi-card k-warn">
     <div class="kpi-label">Other Expenses</div>
-    <div class="kpi-value">৳ {{ total_expense|floatformat:0 }}</div>
+    <div class="kpi-value">৳ {{ other_expense|floatformat:0 }}</div>
     <div class="kpi-meta">{{ expenses.count }} expense record{{ expenses.count|pluralize }}</div>
   </div>
   <div class="kpi-card k-blue">
@@ -147,7 +147,7 @@
     </span>
   </div>
   <div class="table-responsive">
-    <table class="table">
+    <table class="table profit-loss-transactions-table">
       <thead>
         <tr>
           <th>Date</th>
@@ -215,7 +215,7 @@
 <div class="card">
   <div class="card-header"><span class="card-title">Expenses This Month</span></div>
   <div class="table-responsive">
-    <table class="table">
+    <table class="table profit-loss-expenses-table">
       <thead>
         <tr>
           <th>Date</th><th>Category</th>

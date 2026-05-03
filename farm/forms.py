@@ -128,6 +128,10 @@ class ExpenseForm(UserScopedFormMixin, forms.ModelForm):
             "date":  forms.DateInput(attrs={"type": "date"}),
             "notes": forms.Textarea(attrs={"rows": 2}),
         }
+        help_texts = {
+            "category": "Choose a category like Feed, Transport, Doctor, Medicine, Labour, etc.",
+            "amount": "Amount spent in BDT. Enter the actual cost for the expense.",
+        }
 
 
 # ── MortalityLogForm ──────────────────────────────────────────────────────────

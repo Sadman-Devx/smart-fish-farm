@@ -10,7 +10,7 @@
 
 {% block content %}
 <div class="page-header mb-16">
-  <div><h1>Expenses</h1><p>Track all farm costs — feed, medicine, labour, equipment</p></div>
+  <div><h1>Expenses</h1><p>Track all farm costs — feed, transport, doctor, medicine, labour, equipment</p></div>
 </div>
 
 <div style="display:grid;grid-template-columns:1fr 320px;gap:16px;margin-bottom:20px">
@@ -49,16 +49,16 @@
   </div>
   {% if expenses %}
   <div class="table-responsive">
-    <table class="table">
+    <table class="table batch-all-expenses">
       <thead>
         <tr><th>Date</th><th>Category</th><th>Description</th><th>Pond</th><th class="text-end">Amount (৳)</th></tr>
       </thead>
       <tbody>
         {% for exp in expenses %}
         <tr>
-          <td class="text-muted fs-sm">{{ exp.date }}</td>
+          <td class="text-muted fs-sm">{{ exp.date|date:"j M y" }}</td>
           <td>
-            <span class="badge {% if exp.category == 'feed' %}badge-info{% elif exp.category == 'medicine' %}badge-danger{% else %}badge-secondary{% endif %}">
+            <span class="badge {% if exp.category == 'feed' %}badge-info{% elif exp.category == 'medicine' %}badge-danger{% elif exp.category == 'transport' %}badge-warning{% elif exp.category == 'doctor' %}badge-secondary{% else %}badge-secondary{% endif %}">
               {{ exp.get_category_display }}
             </span>
           </td>
