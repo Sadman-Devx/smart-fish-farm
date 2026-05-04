@@ -172,9 +172,13 @@ def profile_view(request):
     # Fetch FarmProfile safely without inline imports or broad try/except blocks
     farm_profile = getattr(request.user, 'farm_profile', None)
 
+    # Google OAuth users have no usable password — modal adapts accordingly
+    is_social_user = not request.user.has_usable_password()
+
     return render(request, "accounts/profile.html", {
         "form": form,
         "farm_profile": farm_profile,
+        "is_social_user": is_social_user,
     })
 
 
@@ -270,3 +274,85 @@ def _mask_email(email):
     local, domain = email.split("@", 1)
     visible = local[:2] if len(local) > 2 else local[0]
     return f"{visible}{'*' * (len(local) - len(visible))}@{domain}"
+
+
+# ── Danger Zone: Delete All Data ──────────────────────────────────────────────
+
+@require_POST
+@login_required
+def delete_all_data_view(request):
+    """
+    Hard-delete ALL farm data belonging to the current user.
+    - Normal users: must supply their current password.
+    - Google OAuth users (no usable password): identity already confirmed
+      by the active Google session, so no extra password is required.
+    The account itself is preserved — only farm data is wiped.
+    """
+    from django.contrib.auth import authenticate as auth_check
+
+    is_social_user = not request.user.has_usable_password()
+
+    if not is_social_user:
+        # Regular email/password user — verify password before deleting
+        password = request.POST.get("confirm_password", "").strip()
+        verified = auth_check(request, username=request.user.email, password=password)
+        if verified is None:
+            messages.error(request, "Incorrect password. No data was deleted.")
+            return redirect("accounts:profile")
+    # Google OAuth users skip password check — their active session is proof of identity
+
+    # ── Hard-delete all farm data owned by this user ──────────────────────
+    try:
+        from farm.models import (
+            Pond, FarmProfile, FeedLog, FeedingReminder,
+            SensorReading, HarvestRecord, Expense, MortalityLog,
+            FarmAlert, PondNote, PerformanceLog, BenchmarkRun,
+            DiseaseLog, DiseaseAlert, WeatherRecord,
+        )
+
+        # user_ponds is the anchor — everything chains from here
+        user_ponds = Pond.objects.filter(owner=request.user)
+
+        # Models with direct user FK
+        DiseaseAlert.objects.filter(user=request.user).delete()
+        DiseaseLog.objects.filter(user=request.user).delete()
+
+        # Models linked via Pond -> user
+        FarmAlert.objects.filter(pond__in=user_ponds).delete()
+        FeedLog.objects.filter(batch__pond__in=user_ponds).delete()
+        FeedingReminder.objects.filter(batch__pond__in=user_ponds).delete()
+        SensorReading.objects.filter(pond__in=user_ponds).delete()
+        HarvestRecord.objects.filter(batch__pond__in=user_ponds).delete()
+        MortalityLog.objects.filter(batch__pond__in=user_ponds).delete()
+        PondNote.objects.filter(pond__in=user_ponds).delete()
+        Expense.objects.filter(pond__in=user_ponds).delete()
+        WeatherRecord.objects.filter(pond__in=user_ponds).delete()
+
+        # BenchmarkRun & PerformanceLog have no user FK — skip them
+
+        # Delete ponds (cascades FishBatch, GrowthRecord via FK)
+        user_ponds.delete()
+
+        # Delete FarmProfile so they can re-do onboarding
+        FarmProfile.objects.filter(user=request.user).delete()
+
+    except Exception as exc:
+        messages.error(request, f"An error occurred while deleting data: {exc}")
+        return redirect("accounts:profile")
+
+    # Invalidate any Django cache keys for this user
+    try:
+        from django.core.cache import cache
+        from django.utils import timezone
+        cache.delete(f"pond_list_{request.user.pk}")
+        cache.delete(f"analytics_dashboard_{request.user.pk}")
+        cache.delete(f"profit_loss_{request.user.pk}_{timezone.now().strftime('%Y-%m')}")
+    except Exception:
+        pass  # Cache errors are non-fatal
+
+    messages.success(
+        request,
+        "✅ All your farm data has been permanently deleted. "
+        "Your account is still active — you can start fresh anytime."
+    )
+    return redirect("accounts:profile")

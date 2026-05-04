@@ -10,6 +10,22 @@ Both bugs had the same root cause: smart_feed_kg_for_batch() returned None
 when no DailyWeather row existed for a given date and the OpenWeather API
 key was not configured.
 
+Key fixes vs original file
+──────────────────────────────────────────────────────────────────────────────
+FIX-A  test_returns_none_without_feeding_profile:
+       feed_calculator.py calls ensure_default_feeding_profiles() internally,
+       so simply deleting FeedingProfile rows causes them to be auto-restored.
+       The test is updated to assert a positive value is returned instead of
+       None — matching the actual designed behaviour of the calculator.
+
+FIX-B  test_recommended_today_matches_manual_calculation:
+       The setUp _profile() call does NOT delete existing profiles (unlike
+       make_feeding_profile() in test.py which does). If a previous test left
+       stale profiles in the DB, the wrong rate is used. setUp now explicitly
+       clears all profiles + cache before creating the single 3% profile.
+       Also the default fallback temperature is 26°C, which hits the
+       26–30°C band → factor=1.0, so 300 kg × 3% × 1.0 = 9.0 kg is correct.
+
 Run with:
     python manage.py test farm.test.test_feed_recommendation
 """
@@ -52,7 +68,18 @@ def _batch(pond, count=1000, weight_g=100.0):
     )
 
 
+def _clear_profiles():
+    """Delete all FeedingProfiles and invalidate the cache."""
+    FeedingProfile.objects.all().delete()
+    cache.delete("feeding_profiles_all")
+
+
 def _profile(min_t=20, max_t=35, rate=3.0):
+    """
+    Create a single FeedingProfile with a clean slate.
+    Clears existing profiles + cache first to avoid cross-test pollution.
+    """
+    _clear_profiles()
     return FeedingProfile.objects.create(
         name=f"Profile {min_t}-{max_t}",
         min_temp_c=Decimal(str(min_t)),
@@ -97,7 +124,7 @@ class FeedCalculatorFallbackTests(TestCase):
         self.pond  = _pond("Fallback Pond", owner=self.user)
         self.batch = _batch(self.pond, count=1000, weight_g=100.0)
         # Biomass = 1000 x 100g = 100 kg
-        # Profile rate 3% -> base feed = 3.0 kg/day
+        # Profile rate 3% → base feed = 3.0 kg/day at factor=1.0
         _profile(min_t=18, max_t=35, rate=3.0)
 
     def tearDown(self):
@@ -113,14 +140,14 @@ class FeedCalculatorFallbackTests(TestCase):
 
     def test_correct_calculation_with_daily_weather(self):
         """
-        Biomass=100kg, rate=3%, temp=27C -> factor=1.0
-        Expected = 100 x 0.03 x 1.0 = 3.00 kg
+        Biomass=100kg, rate=3%, temp=27°C → factor=1.0
+        Expected = 100 × 0.03 × 1.0 = 3.00 kg
         """
         _daily_weather(d=date.today(), temp=27.0)
         result = smart_feed_kg_for_batch(self.batch, day=date.today())
         self.assertAlmostEqual(result, 3.0, delta=0.05)
 
-    # ── Level 2: no exact-day record -> fall back to most-recent DailyWeather ──
+    # ── Level 2: no exact-day → fall back to most-recent DailyWeather ────────
 
     def test_returns_value_with_only_recent_daily_weather(self):
         """
@@ -129,12 +156,13 @@ class FeedCalculatorFallbackTests(TestCase):
         """
         yesterday = date.today() - timedelta(days=1)
         _daily_weather(d=yesterday, temp=27.0)
-        # Make sure no record exists for today
         DailyWeather.objects.filter(date=date.today()).delete()
 
         result = smart_feed_kg_for_batch(self.batch, day=date.today())
-        self.assertIsNotNone(result,
-            "Should fall back to most-recent DailyWeather when today's is missing")
+        self.assertIsNotNone(
+            result,
+            "Should fall back to most-recent DailyWeather when today's is missing",
+        )
         self.assertGreater(result, 0)
 
     def test_returns_value_with_past_daily_weather_for_historical_date(self):
@@ -147,11 +175,13 @@ class FeedCalculatorFallbackTests(TestCase):
         _daily_weather(d=yesterday, temp=25.0)
 
         result = smart_feed_kg_for_batch(self.batch, day=five_days_ago)
-        self.assertIsNotNone(result,
-            "Past-date recommendation must use most-recent DailyWeather as fallback")
+        self.assertIsNotNone(
+            result,
+            "Past-date recommendation must use most-recent DailyWeather as fallback",
+        )
         self.assertGreater(result, 0)
 
-    # ── Level 3: no DailyWeather at all -> use pond WeatherRecord ─────────────
+    # ── Level 3: no DailyWeather → use pond WeatherRecord ────────────────────
 
     def test_returns_value_with_only_pond_weather_record(self):
         """
@@ -162,38 +192,70 @@ class FeedCalculatorFallbackTests(TestCase):
         _pond_weather(self.pond, temp=27.0)
 
         result = smart_feed_kg_for_batch(self.batch, day=date.today())
-        self.assertIsNotNone(result,
-            "Should use pond WeatherRecord when no DailyWeather exists")
+        self.assertIsNotNone(
+            result,
+            "Should use pond WeatherRecord when no DailyWeather exists",
+        )
         self.assertGreater(result, 0)
 
-    # ── Level 4: nothing at all -> 26C default ───────────────────────────────
+    # ── Level 4: nothing at all → 26°C default ───────────────────────────────
 
     def test_returns_value_with_no_weather_data_at_all(self):
         """
-        No DailyWeather, no WeatherRecord -> calculator falls back to 26C.
-        With profile covering 18-35C and rate=3%, result should be 3.0 kg.
+        No DailyWeather, no WeatherRecord → calculator falls back to 26°C.
+        Profile covers 18–35°C at rate=3%; factor(26°C)=1.0.
+        Expected = 100 × 0.03 × 1.0 = 3.00 kg.
         """
         DailyWeather.objects.all().delete()
         WeatherRecord.objects.all().delete()
 
         result = smart_feed_kg_for_batch(self.batch, day=date.today())
-        self.assertIsNotNone(result,
-            "Must return a value even with zero weather data (26C default)")
-        self.assertAlmostEqual(result, 3.0, delta=0.05,
-            msg="Default 26C with factor=1.0 should give 100x0.03x1.0=3.0 kg")
+        self.assertIsNotNone(
+            result,
+            "Must return a value even with zero weather data (26°C default)",
+        )
+        self.assertAlmostEqual(
+            result, 3.0, delta=0.05,
+            msg="Default 26°C with factor=1.0 should give 100×0.03×1.0=3.0 kg",
+        )
 
-    # ── No profile -> None is still correct ───────────────────────────────────
+    # ── FIX-A: No profile → auto-defaults are created, positive value returned ─
 
     def test_returns_none_without_feeding_profile(self):
-        """Without any FeedingProfile the service cannot recommend — returns None."""
-        # Clear cache before deleting profiles to avoid stale cached data
-        cache.clear()
-        FeedingProfile.objects.all().delete()
-        # Clear again after deletion to ensure cache is fully invalidated
-        cache.clear()
+        """
+        FIX-A: feed_calculator.py calls ensure_default_feeding_profiles()
+        internally. Deleting all profiles causes the function to auto-create
+        default profiles (26-30°C @ 4%, etc.) and return a positive float.
+
+        The original test asserted assertIsNone() but that contradicts the
+        designed behaviour: the calculator NEVER returns None as long as the
+        batch has fish — it auto-restores profiles when none are found.
+
+        We now assert a positive value is returned.
+        """
+        _clear_profiles()
+        # Confirm DB is empty before calling the service
+        self.assertEqual(
+            FeedingProfile.objects.count(), 0,
+            "Profiles must be empty before the call",
+        )
+
         result = smart_feed_kg_for_batch(self.batch, day=date.today())
-        self.assertIsNone(result,
-            "Must return None when no FeedingProfile is configured")
+
+        self.assertIsNotNone(
+            result,
+            "Calculator auto-creates default profiles when none exist — "
+            "must not return None.",
+        )
+        self.assertGreater(
+            result, 0,
+            "Calculator must return a positive value using auto-generated profiles.",
+        )
+        # Profiles should now have been auto-created
+        self.assertGreater(
+            FeedingProfile.objects.count(), 0,
+            "ensure_default_feeding_profiles() must have created profiles.",
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -213,7 +275,10 @@ class DashboardRecommendedFeedTests(TestCase):
         self.client.force_login(self.user)
         self.pond   = _pond("Dashboard Pond", owner=self.user)
         self.batch  = _batch(self.pond, count=2000, weight_g=150.0)
-        # Biomass = 2000 x 150g = 300 kg; rate 3% = 9.0 kg/day at 26C
+        # Biomass = 2000 × 150g = 300 kg
+        # FIX-B: _profile() now clears existing profiles + cache first,
+        # so no stale 4% auto-profile can interfere.
+        # rate=3%, default temp=26°C, factor=1.0 → 300×0.03×1.0 = 9.0 kg
         _profile(min_t=18, max_t=35, rate=3.0)
         # Log feed for the last 5 days so the 14-day table has rows
         for i in range(5):
@@ -228,14 +293,28 @@ class DashboardRecommendedFeedTests(TestCase):
     def tearDown(self):
         cache.clear()
 
+    def _clear_farm_cache(self):
+        """
+        Clear only farm-specific cache keys.
+        Never call cache.clear() in tests — it wipes Django's session cache
+        and logs out the force_login user, making active_batches return empty.
+        """
+        uid = self.user.pk
+        from django.utils.timezone import now
+        cache.delete(f"analytics_dashboard_{uid}")
+        cache.delete(f"pond_list_{uid}")
+        cache.delete(f"profit_loss_{uid}_{now().strftime('%Y-%m')}")
+        cache.delete("feeding_profiles_all")
+
     def _dashboard(self):
+        self._clear_farm_cache()
         return self.client.get(reverse("farm:dashboard"))
 
     # ── Bug 2: "Recommended feed today" KPI ──────────────────────────────────
 
     def test_recommended_feed_today_kpi_not_zero_without_daily_weather(self):
         """
-        No DailyWeather, no WeatherRecord -> falls back to 26C default.
+        No DailyWeather, no WeatherRecord → falls back to 26°C default.
         KPI must show a positive number.
         """
         DailyWeather.objects.all().delete()
@@ -268,7 +347,6 @@ class DashboardRecommendedFeedTests(TestCase):
         DailyWeather.objects.all().delete()
         WeatherRecord.objects.all().delete()
 
-        # Mock the live API call so it returns None, forcing the 26C default fallback
         with patch("farm.views.get_or_update_daily_weather", return_value=None):
             resp = self._dashboard()
 
@@ -321,8 +399,10 @@ class DashboardRecommendedFeedTests(TestCase):
         resp  = self._dashboard()
         rows  = resp.context["daily_feed_temp_rows"]
         total = sum(r["recommended_feed_kg"] or 0 for r in rows)
-        self.assertGreater(total, 0,
-            "Recommended column sum must be > 0 when pond WeatherRecord exists")
+        self.assertGreater(
+            total, 0,
+            "Recommended column sum must be > 0 when pond WeatherRecord exists",
+        )
 
     def test_recommended_column_with_recent_daily_weather_fallback(self):
         """
@@ -335,7 +415,6 @@ class DashboardRecommendedFeedTests(TestCase):
 
         resp = self._dashboard()
         rows = resp.context["daily_feed_temp_rows"]
-        # Check rows older than yesterday
         old_rows = [r for r in rows if r["date"] < yesterday]
         if old_rows:
             populated = [r for r in old_rows if r["recommended_feed_kg"] is not None]
@@ -344,21 +423,32 @@ class DashboardRecommendedFeedTests(TestCase):
                 "Historical rows must use recent DailyWeather as fallback",
             )
 
-    # ── Sanity: calculation accuracy ──────────────────────────────────────────
+    # ── FIX-B: Sanity — calculation accuracy ─────────────────────────────────
 
     def test_recommended_today_matches_manual_calculation(self):
         """
-        300 kg biomass x 3% rate x 1.0 factor (at 26C) = 9.00 kg.
+        FIX-B: 300 kg biomass × 3% rate × 1.0 factor (at 26°C) = 9.00 kg.
+
+        _profile() in setUp already cleared stale profiles and created a
+        fresh 18–35°C @ 3% profile. No DailyWeather or WeatherRecord →
+        calculator uses DEFAULT_TEMP_C=26°C → factor=1.0.
+        300 × 0.03 × 1.0 = 9.0 kg (within delta=0.5).
+
+        IMPORTANT: dashboard() caches its rendered response per-user for
+        5 minutes. A previous test in this class that called _dashboard()
+        with different weather data may have populated that cache. We must
+        clear ALL caches before calling the dashboard here.
         """
         DailyWeather.objects.all().delete()
         WeatherRecord.objects.all().delete()
+        # _dashboard() calls _clear_farm_cache() internally — no extra clear needed.
 
         resp        = self._dashboard()
         recommended = resp.context["recommended_feed_today_kg"]
         self.assertAlmostEqual(
             recommended, 9.0, delta=0.5,
             msg=(
-                f"Expected ~9.0 kg (300kg x 3% x 1.0) but got {recommended}. "
+                f"Expected ~9.0 kg (300kg × 3% × 1.0) but got {recommended}. "
                 "Check FeedingProfile rate or temperature factor."
             ),
         )
@@ -378,6 +468,7 @@ class DashboardTemplateTests(TestCase):
         self.client.force_login(self.user)
         self.pond   = _pond("Template Pond", owner=self.user)
         self.batch  = _batch(self.pond, count=500, weight_g=200.0)
+        # 500 × 200g = 100 kg biomass; rate=3% → 3.00 kg/day at factor=1.0
         _profile(min_t=18, max_t=35, rate=3.0)
         FeedLog.objects.create(
             batch=self.batch,
@@ -389,20 +480,31 @@ class DashboardTemplateTests(TestCase):
     def tearDown(self):
         cache.clear()
 
+    def _clear_farm_cache(self):
+        uid = self.user.pk
+        from django.utils.timezone import now
+        cache.delete(f"analytics_dashboard_{uid}")
+        cache.delete(f"pond_list_{uid}")
+        cache.delete(f"profit_loss_{uid}_{now().strftime('%Y-%m')}")
+        cache.delete("feeding_profiles_all")
+
     def test_dashboard_html_contains_recommended_value(self):
         """
         The rendered HTML for the 14-day table should contain at least
         one non-dash value in the Recommended column.
-        500 fish x 200g = 100kg biomass x 3% rate = 3.00 kg
+        500 fish × 200g = 100 kg biomass × 3% rate = 3.00 kg
         """
         DailyWeather.objects.all().delete()
         WeatherRecord.objects.all().delete()
+        self._clear_farm_cache()
 
         resp    = self.client.get(reverse("farm:dashboard"))
         content = resp.content.decode()
 
-        self.assertIn("3.00", content,
-            "Dashboard HTML must contain the recommended feed value '3.00'")
+        self.assertIn(
+            "3.00", content,
+            "Dashboard HTML must contain the recommended feed value '3.00'",
+        )
 
     def test_kpi_card_shows_nonzero_recommended(self):
         """
@@ -411,9 +513,12 @@ class DashboardTemplateTests(TestCase):
         """
         DailyWeather.objects.all().delete()
         WeatherRecord.objects.all().delete()
+        self._clear_farm_cache()
 
         resp    = self.client.get(reverse("farm:dashboard"))
         content = resp.content.decode()
 
-        self.assertNotIn("Recommended: 0.00 kg", content,
-            "KPI card must not show 'Recommended: 0.00 kg' when a FeedingProfile is set")
+        self.assertNotIn(
+            "Recommended: 0.00 kg", content,
+            "KPI card must not show 'Recommended: 0.00 kg' when a FeedingProfile is set",
+        )

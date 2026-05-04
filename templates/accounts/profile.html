@@ -11,12 +11,6 @@
 {% endblock %}
 
 {% block content %}
-<div class="page-header mb-16">
-  <div>
-    <h1>My Profile</h1>
-    <p>Manage your account details and security settings</p>
-  </div>
-</div>
 
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
 
@@ -132,6 +126,40 @@
         </div>
       </div>
     </div>
+
+    {# ── Danger Zone (inline in right column — always visible without scroll) ── #}
+    <div class="card" style="border:1px solid rgba(239,68,68,.35);
+         background:rgba(239,68,68,.04);">
+      <div class="card-header" style="border-bottom:1px solid rgba(239,68,68,.25);">
+        <span class="card-title" style="color:var(--danger);display:flex;align-items:center;gap:8px;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          Danger Zone
+        </span>
+      </div>
+      <div class="card-body" style="padding:14px 16px">
+        <div class="fs-sm text-muted" style="margin-bottom:12px;">
+          Permanently delete all your ponds, batches, logs, expenses, and farm profile.
+          <strong style="color:var(--danger)">Cannot be undone.</strong>
+        </div>
+        <button type="button"
+                onclick="document.getElementById('dangerModal').style.display='flex'"
+                style="width:100%;padding:9px;border-radius:6px;
+                       background:rgba(239,68,68,.15);color:var(--danger);
+                       border:1px solid rgba(239,68,68,.4);cursor:pointer;
+                       font-weight:600;font-size:13px;
+                       transition:background .2s;"
+                onmouseover="this.style.background='rgba(239,68,68,.28)'"
+                onmouseout="this.style.background='rgba(239,68,68,.15)'">
+          🗑 Delete All Farm Data
+        </button>
+      </div>
+    </div>
+
   </div>
 
 </div>
@@ -180,4 +208,145 @@
     {% endif %}
   </div>
 </div>
+
+
+{# ── Delete Confirmation Modal ── #}
+<div id="dangerModal"
+     style="display:none;position:fixed;inset:0;z-index:9999;
+            align-items:center;justify-content:center;
+            background:rgba(0,0,0,.65);backdrop-filter:blur(4px);">
+  <div style="background:var(--surface);border:1px solid rgba(239,68,68,.4);
+              border-radius:12px;padding:32px;max-width:440px;width:90%;
+              box-shadow:0 24px 48px rgba(0,0,0,.5);position:relative;">
+
+    {# Close button #}
+    <button onclick="closeDangerModal()"
+            style="position:absolute;top:12px;right:12px;background:none;
+                   border:none;color:var(--muted);font-size:20px;cursor:pointer;
+                   line-height:1;">✕</button>
+
+    {# Icon + heading #}
+    <div style="text-align:center;margin-bottom:20px;">
+      <div style="font-size:40px;margin-bottom:8px;">⚠️</div>
+      <h2 style="color:var(--danger);margin:0 0 6px;font-size:20px;">
+        Delete All Farm Data?
+      </h2>
+      <p class="fs-sm text-muted" style="margin:0;">
+        This will <strong>permanently erase</strong> every pond, fish batch,
+        feeding log, expense, harvest, sensor record, and your farm profile.
+        This action <strong>cannot be reversed</strong>.
+      </p>
+    </div>
+
+    {# Step 1: type DELETE #}
+    <div style="margin-bottom:16px;">
+      <label class="form-label" style="color:var(--danger);">
+        Step 1 — Type <code style="background:rgba(239,68,68,.15);
+        padding:2px 6px;border-radius:4px;letter-spacing:.05em;">DELETE</code>
+        to confirm:
+      </label>
+      <input id="deleteConfirmWord" type="text" autocomplete="off"
+             placeholder="Type DELETE here"
+             oninput="checkDangerForm()"
+             style="width:100%;padding:9px 12px;border-radius:6px;
+                    border:1px solid rgba(239,68,68,.4);background:var(--bg);
+                    color:var(--text);font-size:14px;box-sizing:border-box;
+                    margin-top:4px;">
+    </div>
+
+    {# Step 2: enter password — only for email/password users #}
+    <form id="deleteDataForm" method="post"
+          action="{% url 'accounts:delete_all_data' %}">
+      {% csrf_token %}
+      {% if not is_social_user %}
+      <div style="margin-bottom:20px;">
+        <label class="form-label" style="color:var(--danger);">
+          Step 2 — Enter your current password:
+        </label>
+        <input id="deletePassword" name="confirm_password" type="password"
+               autocomplete="current-password"
+               placeholder="Your password"
+               oninput="checkDangerForm()"
+               style="width:100%;padding:9px 12px;border-radius:6px;
+                      border:1px solid rgba(239,68,68,.4);background:var(--bg);
+                      color:var(--text);font-size:14px;box-sizing:border-box;
+                      margin-top:4px;">
+      </div>
+      {% else %}
+      <div style="margin-bottom:20px;padding:12px 14px;border-radius:8px;
+                  background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);">
+        <div class="fs-sm" style="color:#fbbf24;display:flex;align-items:center;gap:8px;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          You signed in via <strong>Google</strong>. No password needed —
+          your active Google session confirms your identity.
+        </div>
+      </div>
+      {% endif %}
+
+      <div style="display:flex;gap:10px;">
+        <button type="button" onclick="closeDangerModal()"
+                style="flex:1;padding:10px;border-radius:6px;
+                       background:var(--surface2);color:var(--text);
+                       border:1px solid var(--border);cursor:pointer;
+                       font-weight:600;font-size:14px;">
+          Cancel
+        </button>
+        <button id="deleteSubmitBtn" type="submit" disabled
+                style="flex:1;padding:10px;border-radius:6px;
+                       background:rgba(239,68,68,.2);color:rgba(239,68,68,.5);
+                       border:1px solid rgba(239,68,68,.3);cursor:not-allowed;
+                       font-weight:700;font-size:14px;transition:all .2s;">
+          🗑 Delete Everything
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+const isSocialUser = {% if is_social_user %}true{% else %}false{% endif %};
+
+function closeDangerModal() {
+  document.getElementById('dangerModal').style.display = 'none';
+  document.getElementById('deleteConfirmWord').value = '';
+  const pwField = document.getElementById('deletePassword');
+  if (pwField) pwField.value = '';
+  checkDangerForm();
+}
+
+function checkDangerForm() {
+  const word     = document.getElementById('deleteConfirmWord').value.trim();
+  const pwField  = document.getElementById('deletePassword');
+  const password = pwField ? pwField.value.trim() : null;
+  const btn      = document.getElementById('deleteSubmitBtn');
+
+  // Google users: only need to type DELETE
+  // Email users: need DELETE + password
+  const ready = isSocialUser
+    ? (word === 'DELETE')
+    : (word === 'DELETE' && password && password.length > 0);
+
+  btn.disabled = !ready;
+  if (ready) {
+    btn.style.background   = 'rgba(239,68,68,.85)';
+    btn.style.color        = '#fff';
+    btn.style.borderColor  = 'var(--danger)';
+    btn.style.cursor       = 'pointer';
+  } else {
+    btn.style.background   = 'rgba(239,68,68,.2)';
+    btn.style.color        = 'rgba(239,68,68,.5)';
+    btn.style.borderColor  = 'rgba(239,68,68,.3)';
+    btn.style.cursor       = 'not-allowed';
+  }
+}
+
+// Close modal when clicking the dark backdrop
+document.getElementById('dangerModal').addEventListener('click', function(e) {
+  if (e.target === this) closeDangerModal();
+});
+</script>
 {% endblock %}

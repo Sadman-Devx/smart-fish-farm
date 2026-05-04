@@ -14,4 +14,5 @@ urlpatterns = [
     path("sessions/",                         views.sessions_view,       name="sessions"),
     path("sessions/<int:session_id>/revoke/", views.revoke_session_view, name="revoke_session"),
     path("profile/toggle-2fa/",               views.toggle_2fa_view,     name="toggle_2fa"),
+    path("profile/delete-all-data/",          views.delete_all_data_view,name="delete_all_data"),
 ]

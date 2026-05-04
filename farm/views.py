@@ -514,7 +514,7 @@ def batch_update(request, pk):
         form = forms.FishBatchForm(instance=batch, user=request.user)
     return render(request, "farm/simple_form.html", {"form": form, "title": "Update Fish Batch"})
 
-@login_required
+
 def pond_list(request):
     if request.user.is_authenticated:
         cache_key = f"pond_list_{request.user.pk}"
