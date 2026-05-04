@@ -4,6 +4,7 @@ Django settings for smart_fish_farm project.
 
 import os
 from pathlib import Path
+import sys
 from dotenv import load_dotenv
 from celery.schedules import crontab
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -113,13 +114,10 @@ LOGOUT_REDIRECT_URL = '/accounts/login/'
 # ── django-allauth ─────────────────────────────────────────────────────────────
 SITE_ID = 2
 
-# ── FIX: replaces deprecated ACCOUNT_EMAIL_REQUIRED + ACCOUNT_USERNAME_REQUIRED
-# These two old settings caused the startup WARNING in the terminal.
 ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
 
 ACCOUNT_LOGIN_METHODS             = {'email'}
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None
-# Keep legacy allauth compatibility as some environments still validate these.
 ACCOUNT_AUTHENTICATION_METHOD     = 'email'
 ACCOUNT_USERNAME_REQUIRED         = False
 ACCOUNT_EMAIL_REQUIRED            = True
@@ -164,10 +162,10 @@ TWILIO_TO_NUMBER    = os.environ.get("TWILIO_TO_NUMBER", "")
 
 
 # ── Weather API ────────────────────────────────────────────────────────────────
-WEATHER_API_KEY  = os.environ.get("OPENWEATHER_API_KEY", "")
-WEATHER_LOCATION = os.environ.get("OPENWEATHER_LOCATION", "Chandpur,Bangladesh")
+WEATHER_API_KEY    = os.environ.get("OPENWEATHER_API_KEY", "")
+WEATHER_LOCATION   = os.environ.get("OPENWEATHER_LOCATION", "Chandpur,Bangladesh")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
-GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
+GOOGLE_API_KEY     = os.environ.get("GOOGLE_API_KEY", "")
 
 
 # ── Farm analytics defaults ────────────────────────────────────────────────────
@@ -177,12 +175,10 @@ DEFAULT_MARKET_WEIGHT_G = float(os.environ.get("DEFAULT_MARKET_WEIGHT_G", "500")
 
 
 # ── Celery ─────────────────────────────────────────────────────────────────────
-#CELERY_BROKER_URL     = "memory://"
-#CELERY_RESULT_BACKEND = "rpc://"
-CELERY_BROKER_URL = "redis://localhost:6379/0"
+CELERY_BROKER_URL     = "redis://localhost:6379/0"
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 
-CELERY_TIMEZONE = 'Asia/Dhaka'
+CELERY_TIMEZONE   = 'Asia/Dhaka'
 CELERY_ENABLE_UTC = False
 
 CELERY_BEAT_SCHEDULE = {
@@ -200,15 +196,37 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
+
+# ── Redis Cache ────────────────────────────────────────────────────────────────
 CACHES = {
     "default": {
-        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "BACKEND":    "django.core.cache.backends.redis.RedisCache",
+        "LOCATION":   os.environ.get("REDIS_CACHE_URL", "redis://localhost:6379/1"),
+        "TIMEOUT":    300,
+        "KEY_PREFIX": "aquasmart",
     }
 }
 
+# ── Test Cache without Redis (fallback) ───────────────────────────────────────────────────────
+if 'test' in sys.argv:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        }
+    }
+# Session store in Redis — faster than DB sessions
+SESSION_ENGINE      = "django.contrib.sessions.backends.cache"
+SESSION_CACHE_ALIAS = "default"
+
+# Cache time constants (seconds)
+CACHE_TTL_SHORT  = 60 * 2    #  2 minutes — weather, live data
+CACHE_TTL_MEDIUM = 60 * 5    #  5 minutes — dashboard, pond list
+CACHE_TTL_LONG   = 60 * 30   # 30 minutes — analytics, reports
+
+
 # ── Internationalisation ───────────────────────────────────────────────────────
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'Asia/Dhaka'
+TIME_ZONE     = 'Asia/Dhaka'
 USE_I18N      = True
 USE_TZ        = True
 

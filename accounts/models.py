@@ -5,8 +5,7 @@ import string
 from datetime import timedelta
 
 from django.contrib.auth.models import AbstractUser
-from django.contrib.auth import get_user_model
-from django.db import models                          # ← this was missing
+from django.db import models
 from django.utils import timezone
 
 
@@ -25,7 +24,7 @@ class User(AbstractUser):
 
     email              = models.EmailField(unique=True)
     phone              = models.CharField(max_length=20, blank=True)
-    avatar_initials    = models.CharField(max_length=3, blank=True)
+    avatar_initials    = models.CharField(max_length=3, blank=True, editable=False)
     role               = models.CharField(max_length=20, choices=ROLE_CHOICES, default="manager")
     two_factor_enabled = models.BooleanField(default=True)
     two_factor_method  = models.CharField(max_length=10, choices=METHOD_CHOICES, default="email")
@@ -45,15 +44,18 @@ class User(AbstractUser):
         return full if full else self.email.split("@")[0]
 
     def save(self, *args, **kwargs):
-        if not self.avatar_initials:
+        # Only generate if initials is empty and display_name has a value
+        if not self.avatar_initials and self.display_name:
             parts = self.display_name.split()
-            self.avatar_initials = "".join(p[0].upper() for p in parts[:2])
+            # If parts is empty for some reason (though unlikely given the above logic)
+            if parts:  
+                self.avatar_initials = "".join(p[0].upper() for p in parts[:2])
         super().save(*args, **kwargs)
 
 
 # ── OTP helper functions ──────────────────────────────────────────────────────
 def _generate_otp():
-    """Generate a 6-digit numeric OTP."""
+    """Generate a cryptographically secure 6-digit numeric OTP."""
     return "".join(secrets.choice(string.digits) for _ in range(6))
 
 
@@ -68,7 +70,8 @@ class OTPToken(models.Model):
                      'accounts.User', on_delete=models.CASCADE,
                      related_name="otp_tokens"
                  )
-    token      = models.CharField(max_length=6, default=_generate_otp)
+    # Added editable=False so it cannot be manually input in Django Admin
+    token      = models.CharField(max_length=6, default=_generate_otp, editable=False)
     expires_at = models.DateTimeField(default=_otp_expiry)
     used       = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -81,7 +84,8 @@ class OTPToken(models.Model):
 
     def consume(self):
         self.used = True
-        self.save()
+        # Only update the 'used' field to improve performance
+        self.save(update_fields=['used'])  
 
     def __str__(self):
         return f"OTP for {self.user} (valid={self.is_valid()})"
@@ -99,6 +103,8 @@ class LoginAttempt(models.Model):
 
     class Meta:
         ordering = ["-timestamp"]
+        verbose_name = "Login attempt"
+        verbose_name_plural = "Login attempts"
 
     def __str__(self):
         status = "OK" if self.success else "FAIL"
@@ -122,6 +128,8 @@ class UserSession(models.Model):
 
     class Meta:
         ordering = ["-last_active"]
+        verbose_name = "User session"
+        verbose_name_plural = "User sessions"
 
     def __str__(self):
         return f"{self.user} – {self.device_hint or self.ip_address}"

@@ -31,14 +31,15 @@ def device_hint_from_ua(ua: str) -> str:
     else:
         device = "Desktop"
 
-    if "chrome" in ua:
+    # NOTE: Edge must be checked before Chrome because Edge's UA contains "Chrome"
+    if "edge" in ua:
+        browser = "Edge"
+    elif "chrome" in ua:
         browser = "Chrome"
     elif "firefox" in ua:
         browser = "Firefox"
     elif "safari" in ua:
         browser = "Safari"
-    elif "edge" in ua:
-        browser = "Edge"
     else:
         browser = "Browser"
 
@@ -98,7 +99,7 @@ def remaining_lockout_seconds(email: str, ip: str | None) -> int:
 def register_session(user, request) -> None:
     from .models import UserSession
 
-    # session save করো আগে, তারপর key নাও
+    # Save the session first to ensure a session key exists
     if not request.session.session_key:
         request.session.save()
 
@@ -107,8 +108,9 @@ def register_session(user, request) -> None:
     ua   = request.META.get("HTTP_USER_AGENT", "")
     hint = device_hint_from_ua(ua)
 
+    # Skip if session key is still missing
     if not sk:
-        return  # session key না থাকলে skip করো
+        return
 
     UserSession.objects.update_or_create(
         session_key=sk,
@@ -171,4 +173,3 @@ def send_otp_email(user, otp_token) -> None:
     except Exception as e:
         print(f"[OTP] Email sending failed: {e}")
         print("[OTP] Use the code printed in terminal above.")
-

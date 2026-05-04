@@ -6,8 +6,11 @@ Smart feed calculator (Optimized & Crash-Proof)
 
 GUARANTEED BEHAVIOUR
 ────────────────────
-Always returns a positive float as long as the batch has fish.
-Returns None ONLY when biomass is zero/negative/None (all fish dead).
+Always returns a positive float as long as the batch has fish AND 
+a FeedingProfile exists in the database.
+Returns None ONLY when:
+  1. biomass is zero/negative/None (all fish dead), OR
+  2. NO FeedingProfile is configured in the system.
 
 Temperature resolution (highest priority first)
 ───────────────────────────────────────────────
@@ -15,11 +18,6 @@ Temperature resolution (highest priority first)
   2. DailyWeather for the exact day     (DB Cache)
   3. Most-recent DailyWeather in DB     (fallback for historical dates)
   4. Hard default: 26°C                 (absolute last resort)
-
-Feeding rate resolution
-───────────────────────
-  1. FeedingProfile matching water temp (Cached to prevent N+1 queries)
-  2. Built-in default: 3.0% of biomass/day
 """
 from __future__ import annotations
 
@@ -34,10 +32,11 @@ from ..models import DailyWeather, FishBatch, FeedingProfile, WeatherRecord
 
 logger = logging.getLogger(__name__)
 
+
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-DEFAULT_FEED_RATE_PCT: float = 3.0
-DEFAULT_TEMP_C: float        = 26.0
+DEFAULT_FEED_RATE_PCT: float = 3.0   # fallback when NO profiles match the temp
+DEFAULT_TEMP_C: float        = 26.0  # fallback when no weather data at all
 
 # Cache key for FeedingProfiles (they rarely change)
 _PROFILE_CACHE_KEY = "feeding_profiles_all"
@@ -56,16 +55,23 @@ def _safe_float(value, default: float = 0.0) -> float:
         return default
 
 
-def _get_cached_profile_rate(water_temp: float) -> float:
+def _get_cached_profile_rate(water_temp: float) -> float | None:
     """
     Fetch feeding rate from cache/DB.
     Prevents N+1 queries when calculating feed for multiple batches on dashboard.
+    
+    Returns None ONLY if there are absolutely no FeedingProfiles in the database.
+    Returns DEFAULT_FEED_RATE_PCT if profiles exist but none match the temperature.
     """
     profiles = cache.get(_PROFILE_CACHE_KEY)
     
     if profiles is None:
         profiles = list(FeedingProfile.objects.all())
         cache.set(_PROFILE_CACHE_KEY, profiles, timeout=_PROFILE_CACHE_TIMEOUT)
+    
+    # ✅ CRITICAL FIX: If the database has NO profiles at all, return None
+    if not profiles:
+        return None
     
     # Find matching profile in memory (fast, since list is tiny)
     matching = [
@@ -77,6 +83,7 @@ def _get_cached_profile_rate(water_temp: float) -> float:
         # Return the tightest fitting profile's rate
         return _safe_float(matching[0].feeding_rate_pct, DEFAULT_FEED_RATE_PCT)
         
+    # Profiles exist, but none match this specific water_temp. Use safe default.
     return DEFAULT_FEED_RATE_PCT
 
 
@@ -93,12 +100,68 @@ def _temperature_factor(temp_c: float) -> float:
     return 0.90
 
 
+# ── স্তর ১: Auto-Generate Feeding Profiles ───────────────────────────────────
+
+def ensure_default_feeding_profiles() -> None:
+    """
+    ডাটাবেসে কোনো FeedingProfile না থাকলে, 
+    বাংলাদেশের মৎস্যচাষের জন্য standard profiles অটো তৈরি করুন।
+    """
+    if FeedingProfile.objects.exists():
+        return  # ইতিমধ্যে আছে, কিছু করার দরকার নেই
+
+    default_profiles = [
+        {
+            "name": "🥶 শীতকালীন (18-22°C)",
+            "min_temp_c": 18.0,
+            "max_temp_c": 22.0,
+            "feeding_rate_pct": 1.5,
+        },
+        {
+            "name": "🌤️ মৌসুমী (22-26°C)",
+            "min_temp_c": 22.0,
+            "max_temp_c": 26.0,
+            "feeding_rate_pct": 3.0,
+        },
+        {
+            "name": "☀️ আদর্শ (26-30°C)",
+            "min_temp_c": 26.0,
+            "max_temp_c": 30.0,
+            "feeding_rate_pct": 4.0,
+        },
+        {
+            "name": "🔥 গরমকালীন (30-34°C)",
+            "min_temp_c": 30.0,
+            "max_temp_c": 34.0,
+            "feeding_rate_pct": 3.0,
+        },
+        {
+            "name": "🌡️ অতিরিক্ত গরম (34-38°C)",
+            "min_temp_c": 34.0,
+            "max_temp_c": 38.0,
+            "feeding_rate_pct": 2.0,
+        },
+    ]
+
+    created = FeedingProfile.objects.bulk_create([
+        FeedingProfile(**p) for p in default_profiles
+    ])
+    
+    logger.info(
+        f"[FeedCalc] ✅ Auto-generated {len(created)} default FeedingProfiles "
+        f"(System had no profiles configured)"
+    )
+    
+    # Cache invalidate করুন যাতে নতুন ডাটা পড়ে
+    cache.delete(_PROFILE_CACHE_KEY)
+
+
 # ── Main service function ─────────────────────────────────────────────────────
 
 def smart_feed_kg_for_batch(
     batch: FishBatch,
     day: date | None = None,
-    try_live_api: bool = False,  # ✅ FIX: Explicit flag to prevent hidden API blocks
+    try_live_api: bool = False,
 ) -> Optional[float]:
     """
     Return the recommended daily feed (kg) for *batch* on *day*.
@@ -107,8 +170,22 @@ def smart_feed_kg_for_batch(
 
     # ── Step 0: Guard clauses ─────────────────────────────────────────────────
     
-    # ✅ FIX: Handle None biomass (e.g., no growth records yet)
     biomass_kg = _safe_float(batch.latest_biomass_kg)
+    
+    # ✅ স্তর ২: AUTO-FIX (নতুন batch হলে biomass calculate)
+    if biomass_kg <= 0:
+        initial_count = _safe_float(batch.initial_stock_count)
+        avg_weight_g = _safe_float(batch.average_weight_g)
+        
+        if initial_count > 0 and avg_weight_g > 0:
+            biomass_kg = (initial_count * avg_weight_g) / 1000.0
+            try:
+                batch.latest_biomass_kg = biomass_kg
+                batch.save(update_fields=['latest_biomass_kg'])
+                logger.info(f"[FeedCalc] Auto-calculated biomass for batch {batch.id}: {biomass_kg}kg")
+            except Exception:
+                pass
+
     if biomass_kg <= 0:
         return None
 
@@ -118,7 +195,6 @@ def smart_feed_kg_for_batch(
     ambient_temp = 0.0
 
     # Priority A — Pond Sensor (Most accurate)
-    # ✅ FIX: Guard against batch.pond being None
     if batch.pond is not None:
         pond_record = (
             WeatherRecord.objects
@@ -127,14 +203,12 @@ def smart_feed_kg_for_batch(
             .first()
         )
         if pond_record is not None:
-            # ✅ FIX: Safely handle nullable DB fields
             water_temp = _safe_float(pond_record.water_temp_c)
 
     # Priority B — Daily Weather from DB
     daily_weather = DailyWeather.objects.filter(date=target_day).first()
     
-    # Priority C — Live API fetch (ONLY if explicitly requested, e.g., via Cron)
-    # ✅ FIX: Prevents dashboard from taking 15 seconds to load due to HTTP calls
+    # Priority C — Live API fetch (ONLY if explicitly requested)
     if daily_weather is None and try_live_api:
         try:
             from .weather_ingest import get_or_update_daily_weather
@@ -150,11 +224,9 @@ def smart_feed_kg_for_batch(
     if daily_weather is not None:
         dw_temp = _safe_float(daily_weather.temperature_c)
         
-        # Use daily weather for ambient temp
         if dw_temp > 0:
             ambient_temp = dw_temp
             
-        # Fallback water temp if pond sensor failed
         if water_temp == 0.0 and dw_temp > 0:
             water_temp = dw_temp
 
@@ -164,10 +236,15 @@ def smart_feed_kg_for_batch(
     if ambient_temp == 0.0:
         ambient_temp = DEFAULT_TEMP_C
 
-    # ── Step 2: resolve feeding rate (Cached) ────────────────────────────────
+    # ── Step 2: ✅ স্তর ২: AUTO-GENERATE Profiles যদি না থাকে ────────────────
     
-    # ✅ FIX: Uses cached profiles instead of hitting DB for every batch
+    ensure_default_feeding_profiles()  # ← এই এক লাইনেই সব হবে!
+    
     feed_rate_pct = _get_cached_profile_rate(water_temp)
+
+    # ✅ CRITICAL FIX: If no FeedingProfile exists in DB, return None immediately
+    if feed_rate_pct is None:
+        return None
 
     # ── Step 3: calculate ─────────────────────────────────────────────────────
     

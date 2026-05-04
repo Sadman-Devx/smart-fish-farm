@@ -9,8 +9,9 @@
 {% endblock %}
 
 {% block content %}
+
 <div class="page-header mb-16">
-  <div><h1>Harvests</h1><p>All recorded harvest events and revenue</p></div>
+  <div><p>All recorded harvest events and revenue</p></div>
 </div>
 
 <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
@@ -24,7 +25,7 @@
   </div>
   <div class="kpi-card k-orange">
     <div class="kpi-label">Gross Revenue</div>
-    <div class="kpi-value">৳ {{ total_revenue|floatformat:0 }}</div>
+    <div class="kpi-value">Tk {{ total_revenue|floatformat:0 }}</div>
   </div>
 </div>
 

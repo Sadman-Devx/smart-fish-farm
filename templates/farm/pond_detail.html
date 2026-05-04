@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ pond.name }}{% endblock %}
 {% block nav_ponds %}active{% endblock %}
-{% block topbar_title %}{{ pond.name }}{% endblock %}
+{% block topbar_title %}Ponds{% endblock %}
 
 {% block topbar_actions %}
   <a href="{% url 'farm:pond_list' %}" class="btn btn-sm">← Ponds</a>

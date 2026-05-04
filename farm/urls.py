@@ -37,6 +37,8 @@ urlpatterns = [
     path("batches/<int:pk>/edit/",    views.batch_update,      name="batch_update"),
     path("batches/<int:pk>/delete/",  views.batch_delete,      name="batch_delete"),
 
+    path('reset-feeding-profiles/', views.reset_feeding_profiles, name='reset_feeding_profiles'),
+
     # ── Logging (Data Entry) ────────────────────────────────────────────────────
     path("weather/add/",              views.weather_create,    name="weather_create"),
     path("growth/add/",               views.growth_create,     name="growth_create"),

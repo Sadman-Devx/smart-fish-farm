@@ -1,8 +1,11 @@
 from django import forms
 from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
+import random
 
 User = get_user_model()
+
 
 class ProfileForm(forms.ModelForm):
     class Meta:
@@ -49,6 +52,7 @@ class OTPForm(forms.Form):
             raise ValidationError("Enter digits only.")
         return val
 
+
 class RegisterForm(forms.Form):
     first_name = forms.CharField(
         max_length=50,
@@ -67,7 +71,6 @@ class RegisterForm(forms.Form):
     password1 = forms.CharField(
         widget=forms.PasswordInput(attrs={"placeholder": "Min. 8 characters"}),
         label="Password",
-        min_length=8,
     )
     password2 = forms.CharField(
         widget=forms.PasswordInput(attrs={"placeholder": "Repeat password"}),
@@ -80,6 +83,12 @@ class RegisterForm(forms.Form):
             raise forms.ValidationError("An account with this email already exists.")
         return email
 
+    def clean_password1(self):
+        """Django's built-in password validators (e.g., common passwords, numeric only)"""
+        password = self.cleaned_data.get("password1")
+        validate_password(password)
+        return password
+
     def clean(self):
         cleaned = super().clean()
         p1 = cleaned.get("password1")
@@ -91,13 +100,12 @@ class RegisterForm(forms.Form):
     def save(self):
         data = self.cleaned_data
         email = data["email"]
-        username = email.split("@")[0]
-        # Make username unique if needed
-        base = username
-        counter = 1
-        while User.objects.filter(username=username).exists():
-            username = f"{base}{counter}"
-            counter += 1
+        base_username = email.split("@")[0]
+        
+        # Safe username generation to avoid Race Conditions & multiple DB hits
+        username = base_username
+        if User.objects.filter(username=username).exists():
+            username = f"{base_username}{random.randint(1000, 9999)}"
 
         user = User.objects.create_user(
             username=username,

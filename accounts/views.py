@@ -169,12 +169,8 @@ def profile_view(request):
         messages.success(request, "Profile updated.")
         return redirect("accounts:profile")
     
-    # FarmProfile আনো
-    try:
-        from farm.models import FarmProfile
-        farm_profile = request.user.farm_profile
-    except Exception:
-        farm_profile = None
+    # Fetch FarmProfile safely without inline imports or broad try/except blocks
+    farm_profile = getattr(request.user, 'farm_profile', None)
 
     return render(request, "accounts/profile.html", {
         "form": form,
@@ -222,27 +218,7 @@ def revoke_session_view(request, session_id):
     return redirect("accounts:sessions")
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _complete_login(request, user, remember, ip, ua):
-    auth_login(request, user,
-               backend="accounts.backends.EmailBackend")
-    if not remember:
-        request.session.set_expiry(0)
-    else:
-        request.session.set_expiry(30 * 86400)
-
-    LoginAttempt.objects.create(
-        email=user.email, ip_address=ip,
-        user_agent=ua, success=True,
-    )
-    register_session(user, request)
-
-
-def _mask_email(email):
-    local, domain = email.split("@", 1)
-    visible = local[:2] if len(local) > 2 else local[0]
-    return f"{visible}{'*' * (len(local) - len(visible))}@{domain}"
+# ── Registration ──────────────────────────────────────────────────────────────
 
 @never_cache
 def register_view(request):
@@ -271,3 +247,26 @@ def toggle_2fa_view(request):
     status = "enabled" if user.two_factor_enabled else "disabled"
     messages.success(request, f"Two-factor authentication {status}.")
     return redirect("accounts:profile")
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _complete_login(request, user, remember, ip, ua):
+    auth_login(request, user,
+               backend="accounts.backends.EmailBackend")
+    if not remember:
+        request.session.set_expiry(0)
+    else:
+        request.session.set_expiry(30 * 86400)
+
+    LoginAttempt.objects.create(
+        email=user.email, ip_address=ip,
+        user_agent=ua, success=True,
+    )
+    register_session(user, request)
+
+
+def _mask_email(email):
+    local, domain = email.split("@", 1)
+    visible = local[:2] if len(local) > 2 else local[0]
+    return f"{visible}{'*' * (len(local) - len(visible))}@{domain}"

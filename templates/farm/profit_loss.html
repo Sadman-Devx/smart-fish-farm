@@ -13,7 +13,6 @@
 {% block content %}
 <div class="page-header mb-16">
   <div>
-    <h1>Profit & Loss Report</h1>
     <p>Financial summary for {{ start|date:"F Y" }}. Record actual feed purchases as Feed expenses to use actual cost.</p>
   </div>
   <form method="get" style="display:flex;align-items:center;gap:8px">
@@ -28,28 +27,28 @@
 <div class="kpi-grid" style="margin-bottom:20px">
   <div class="kpi-card k-success">
     <div class="kpi-label">Gross Revenue</div>
-    <div class="kpi-value">৳ {{ revenue|floatformat:0 }}</div>
+    <div class="kpi-value">Tk {{ revenue|floatformat:0 }}</div>
     <div class="kpi-meta">From {{ harvests.count }} harvest event{{ harvests.count|pluralize }}</div>
   </div>
   <div class="kpi-card k-orange">
     <div class="kpi-label">{{ feed_cost_label }}</div>
-    <div class="kpi-value">৳ {{ feed_cost|floatformat:0 }}</div>
+    <div class="kpi-value">Tk {{ feed_cost|floatformat:0 }}</div>
     <div class="kpi-meta">{{ feed_cost_meta }}</div>
   </div>
   <div class="kpi-card k-warn">
     <div class="kpi-label">Other Expenses</div>
-    <div class="kpi-value">৳ {{ other_expense|floatformat:0 }}</div>
+    <div class="kpi-value">Tk {{ other_expense|floatformat:0 }}</div>
     <div class="kpi-meta">{{ expenses.count }} expense record{{ expenses.count|pluralize }}</div>
   </div>
   <div class="kpi-card k-blue">
     <div class="kpi-label">Total Cost</div>
-    <div class="kpi-value">৳ {{ total_cost|floatformat:0 }}</div>
+    <div class="kpi-value">Tk {{ total_cost|floatformat:0 }}</div>
     <div class="kpi-meta">Feed + all expenses</div>
   </div>
   <div class="kpi-card {% if net_profit >= 0 %}k-success{% else %}k-orange{% endif %}">
     <div class="kpi-label">Net Profit / Loss</div>
     <div class="kpi-value" style="color:{% if net_profit >= 0 %}var(--success){% else %}var(--danger){% endif %}">
-      {% if net_profit < 0 %}−৳ {{ net_profit|floatformat:0|slice:"1:" }}{% else %}৳ {{ net_profit|floatformat:0 }}{% endif %}
+      {% if net_profit < 0 %}−Tk {{ net_profit|floatformat:0|slice:"1:" }}{% else %}Tk {{ net_profit|floatformat:0 }}{% endif %}
     </div>
     <div class="kpi-meta">
       Margin: <span style="color:{% if margin_pct >= 0 %}var(--success){% else %}var(--danger){% endif %}">{{ margin_pct }}%</span>
@@ -93,7 +92,7 @@
               <div style="width:10px;height:10px;border-radius:2px;background:var(--accent);flex-shrink:0"></div>
               <span class="fs-xs">Feed (calculated)</span>
             </div>
-            <span class="fs-xs fw-bold" style="color:var(--accent)">৳ {{ feed_cost|floatformat:0 }}</span>
+            <span class="fs-xs fw-bold" style="color:var(--accent)">Tk {{ feed_cost|floatformat:0 }}</span>
           </div>
           {% endif %}
           {% for row in by_category %}
@@ -102,12 +101,12 @@
               <div style="width:10px;height:10px;border-radius:2px;background:var(--accent2);flex-shrink:0"></div>
               <span class="fs-xs">{{ row.category|title }}</span>
             </div>
-            <span class="fs-xs fw-bold" style="color:var(--accent3)">৳ {{ row.total|floatformat:0 }}</span>
+            <span class="fs-xs fw-bold" style="color:var(--accent3)">Tk {{ row.total|floatformat:0 }}</span>
           </div>
           {% endfor %}
           <div style="padding-top:8px;border-top:1px solid var(--border);display:flex;justify-content:space-between;margin-top:2px">
             <span class="fs-xs fw-bold">Total Cost</span>
-            <span class="fs-xs fw-bold" style="color:var(--warn)">৳ {{ total_cost|floatformat:0 }}</span>
+            <span class="fs-xs fw-bold" style="color:var(--warn)">Tk {{ total_cost|floatformat:0 }}</span>
           </div>
         </div>
       {% else %}
@@ -143,7 +142,7 @@
   <div class="card-header">
     <span class="card-title">All Transactions — {{ start|date:"F Y" }}</span>
     <span class="pill {% if net_profit >= 0 %}pill-success{% else %}pill-danger{% endif %}">
-      Net: ৳ {{ net_profit|floatformat:0 }}
+      Net: Tk {{ net_profit|floatformat:0 }}
     </span>
   </div>
   <div class="table-responsive">
@@ -153,7 +152,7 @@
           <th>Date</th>
           <th>Type</th>
           <th>Description</th>
-          <th class="text-end">Amount (৳)</th>
+          <th class="text-end">Amount (Tk)</th>
         </tr>
       </thead>
       <tbody>
@@ -191,7 +190,7 @@
           <th>Date</th><th>Batch</th>
           <th class="text-end">kg</th>
           <th class="text-end">Price/kg</th>
-          <th class="text-end">Revenue (৳)</th>
+          <th class="text-end">Revenue (Tk)</th>
         </tr>
       </thead>
       <tbody>
@@ -220,7 +219,7 @@
         <tr>
           <th>Date</th><th>Category</th>
           <th>Description</th>
-          <th class="text-end">Amount (৳)</th>
+          <th class="text-end">Amount (Tk)</th>
         </tr>
       </thead>
       <tbody>
@@ -271,7 +270,7 @@ var trendLabels    = trend.map(function(r){ return r.label; });
       datasets: [
         {
           type: 'bar',
-          label: 'Revenue (৳)',
+          label: 'Revenue (Tk)',
           data: trend.map(function(r){ return r.revenue; }),
           backgroundColor: 'rgba(16,185,129,.55)',
           borderColor: '#10b981',
@@ -280,7 +279,7 @@ var trendLabels    = trend.map(function(r){ return r.label; });
         },
         {
           type: 'bar',
-          label: 'Total Cost (৳)',
+          label: 'Total Cost (Tk)',
           data: trend.map(function(r){ return r.cost; }),
           backgroundColor: 'rgba(255,107,53,.45)',
           borderColor: '#ff6b35',
@@ -289,7 +288,7 @@ var trendLabels    = trend.map(function(r){ return r.label; });
         },
         {
           type: 'line',
-          label: 'Net Profit (৳)',
+          label: 'Net Profit (Tk)',
           data: trend.map(function(r){ return r.profit; }),
           borderColor: '#00e5b4',
           backgroundColor: 'rgba(0,229,180,.08)',
@@ -315,13 +314,13 @@ var trendLabels    = trend.map(function(r){ return r.label; });
           bodyColor: '#7a95b8',
           callbacks: {
             label: function(ctx) {
-              return ' ' + ctx.dataset.label + ': ৳' + Number(ctx.parsed.y).toLocaleString();
+              return ' ' + ctx.dataset.label + ': Tk' + Number(ctx.parsed.y).toLocaleString();
             }
           }
         }
       },
       scales: {
-        y: { grid: { color: '#1f3356' }, ticks: { callback: function(v){ return '৳'+Number(v).toLocaleString(); } } },
+        y: { grid: { color: '#1f3356' }, ticks: { callback: function(v){ return 'Tk'+Number(v).toLocaleString(); } } },
         x: { grid: { display: false } }
       }
     }
@@ -372,7 +371,7 @@ var trendLabels    = trend.map(function(r){ return r.label; });
             label: function(ctx) {
               var total = ctx.dataset.data.reduce(function(a,b){ return a+b; }, 0);
               var pct   = total > 0 ? Math.round(ctx.parsed / total * 100) : 0;
-              return ' ৳' + Number(ctx.parsed).toLocaleString() + ' (' + pct + '%)';
+              return ' Tk' + Number(ctx.parsed).toLocaleString() + ' (' + pct + '%)';
             }
           }
         }
@@ -391,7 +390,7 @@ var trendLabels    = trend.map(function(r){ return r.label; });
       labels: trendLabels,
       datasets: [
         {
-          label: 'Harvest Revenue (৳)',
+          label: 'Harvest Revenue (Tk)',
           data: trend.map(function(r){ return r.revenue; }),
           borderColor: '#10b981',
           backgroundColor: 'rgba(16,185,129,.08)',
@@ -401,7 +400,7 @@ var trendLabels    = trend.map(function(r){ return r.label; });
           pointHoverRadius: 7,
         },
         {
-          label: 'Feed Cost (৳)',
+          label: 'Feed Cost (Tk)',
           data: trend.map(function(r){ return r.feed_cost; }),
           borderColor: '#f59e0b',
           backgroundColor: 'rgba(245,158,11,.06)',
@@ -412,7 +411,7 @@ var trendLabels    = trend.map(function(r){ return r.label; });
           borderDash: [5, 3],
         },
         {
-          label: 'Other Expenses (৳)',
+          label: 'Other Expenses (Tk)',
           data: trend.map(function(r){ return r.other_exp; }),
           borderColor: '#ff6b35',
           backgroundColor: 'transparent',
@@ -437,7 +436,7 @@ var trendLabels    = trend.map(function(r){ return r.label; });
           bodyColor: '#7a95b8',
           callbacks: {
             label: function(ctx) {
-              return ' ' + ctx.dataset.label + ': ৳' + Number(ctx.parsed.y).toLocaleString();
+              return ' ' + ctx.dataset.label + ': Tk' + Number(ctx.parsed.y).toLocaleString();
             }
           }
         }
@@ -445,7 +444,7 @@ var trendLabels    = trend.map(function(r){ return r.label; });
       scales: {
         y: {
           grid: { color: '#1f3356' },
-          ticks: { callback: function(v){ return '৳'+Number(v).toLocaleString(); } }
+          ticks: { callback: function(v){ return 'Tk'+Number(v).toLocaleString(); } }
         },
         x: { grid: { display: false } }
       }
