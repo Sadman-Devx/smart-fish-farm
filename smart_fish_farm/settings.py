@@ -54,6 +54,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'accounts.middleware.SessionActivityMiddleware',
+    
 ]
 
 
@@ -225,7 +226,7 @@ CACHE_TTL_LONG   = 60 * 30   # 30 minutes — analytics, reports
 
 
 # ── Internationalisation ───────────────────────────────────────────────────────
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'en-gb'
 TIME_ZONE     = 'Asia/Dhaka'
 USE_I18N      = True
 USE_TZ        = True

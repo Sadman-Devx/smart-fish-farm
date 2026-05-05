@@ -2,15 +2,16 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Django-5.2-092E20?style=for-the-badge&logo=django&logoColor=white"/>
-  <img src="https://img.shields.io/badge/Python-3.14-3776AB?style=for-the-badge&logo=python&logoColor=white"/>
+  <img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white"/>
   <img src="https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white"/>
   <img src="https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white"/>
   <img src="https://img.shields.io/badge/Celery-37814A?style=for-the-badge&logo=celery&logoColor=white"/>
+  <img src="https://img.shields.io/badge/Google_Gemini-4285F4?style=for-the-badge&logo=google&logoColor=white"/>
   <img src="https://img.shields.io/badge/REST_API-005571?style=for-the-badge&logo=fastapi&logoColor=white"/>
 </p>
 
 <p align="center">
-  A full-featured, intelligent fish farm management platform built with Django — featuring real-time weather integration, automated feeding schedules, IoT sensor support, water quality alerts, and advanced analytics.
+  A full-featured, intelligent fish farm management platform built with Django — featuring real-time weather integration, AI-powered disease diagnosis, IoT sensor support, automated feeding schedules, water quality alerts, ML-based growth prediction, and advanced analytics.
 </p>
 
 ---
@@ -26,17 +27,27 @@
 - [API Reference](#-api-reference)
 - [Core Concepts](#-core-concepts)
 - [Automated Tasks](#-automated-tasks)
-- [Screenshots](#-screenshots)
+- [Security](#-security)
+- [User Roles & Guest Access](#-user-roles--guest-access)
 
 ---
 
 ## ✨ Features
 
+### 🤖 AI Fish Doctor
+- **Google Gemini AI** powered fish disease diagnosis chatbot
+- Upload fish images for visual disease detection
+- Bilingual support (English & Bengali)
+- Automatic disease severity detection (mild / moderate / critical)
+- Disease history logging with recurring alert system
+- Rate-limited per user to prevent API abuse
+
 ### 🌤️ Weather & Feeding Intelligence
-- **Live weather integration** using OpenWeatherMap API — supports GPS coordinates and district/upazila name (Bangladesh)
-- **Smart feeding suggestion** based on temperature and humidity conditions (Good / Reduce 30% / Minimal)
+- **Live weather integration** using OpenWeatherMap API
+- GPS auto-detect or manual Bangladesh district/upazila selection
+- **Smart feeding suggestion** based on temperature and humidity (Good / Reduce 30% / Minimal)
 - **Automated daily feeding schedule** — morning (60%) and evening (40%) split per batch
-- **Weather-based feed rate calculation** using temperature bands and biomass
+- Weather-based feed rate calculation using temperature bands and biomass
 
 ### 🐟 Farm Management
 - Multi-pond management with detailed pond profiles
@@ -44,12 +55,14 @@
 - Growth record logging with weekly weight tracking
 - Mortality log with cause-of-death categorization
 - Harvest records with revenue tracking
+- Pond notes for field observations
 
 ### 💧 Water Quality Monitoring
 - Manual water quality entry (temperature, dissolved oxygen, pH, rainfall)
 - **IoT sensor support** via REST API — sensors can POST data directly
-- **Automated water temperature logging** daily at 9:00 AM (estimated from air temperature)
+- **Automated water temperature logging** daily at 9:00 AM
 - Real-time water quality alerts on dashboard
+- Water quality heatmap visualization
 
 ### 🚨 Alert System
 - Automatic alert generation when water quality is out of safe range:
@@ -57,6 +70,7 @@
   - Water Temperature > 34°C → Critical
   - pH out of range (6.5–9.0) → Warning
 - Email alerts sent immediately when critical conditions detected
+- Disease alerts with recurring detection (same disease 3+ times)
 - Dashboard alert banners with resolve functionality
 
 ### 📊 Analytics & Reports
@@ -64,22 +78,32 @@
 - **Profit/Loss Report** — monthly revenue vs expenses breakdown
 - **Mortality Rate Tracker** — deaths by cause with trend charts
 - **Daily Feed & Temperature** table (last 14 days)
+- **ML-based growth prediction** using scikit-learn
+- **FCR (Feed Conversion Ratio)** analytics
+- **Benchmarking** — compare farm performance against industry standards
 - Feed consumption, biomass, and weather trend charts
 
 ### 🔐 Security & Accounts
 - Custom user model with role-based access (Owner, Manager, Worker, Viewer)
 - Two-Factor Authentication (Email OTP)
 - Google OAuth login (django-allauth)
-- Brute-force protection with rate limiting and account lockout
+- Brute-force protection — 5 attempts → 15-minute lockout
 - Active session tracking and remote session revocation
+- **Danger Zone** — Hard delete all farm data with double confirmation (type DELETE + password)
+- Google OAuth users skip password requirement on data deletion
 
 ### 🌱 Onboarding Flow
 - 4-step farm setup after registration:
   1. Farm basic info (name, size, ponds, water source)
-  2. Location (GPS auto-detect or district/upazila)
-  3. Fish species and experience
+  2. Location — GPS auto-detect or manual district/upazila selection
+  3. Fish species and experience level
   4. Weather data fetched automatically from farm location
-- Farm profile visible on user profile page
+
+### 👁️ Guest Mode
+- Guests can browse all read-only pages (Dashboard, Ponds, Reports)
+- Write operations (add/edit/delete) require login
+- AI Fish Doctor and Analytics Dashboard require login
+- Sidebar clearly shows locked items with 🔒 icon
 
 ---
 
@@ -89,14 +113,17 @@
 |----------|-----------|
 | Backend | Django 5.2 |
 | Database | PostgreSQL |
-| Cache / Broker | Redis |
+| Cache / Session | Redis |
 | Task Queue | Celery + Celery Beat |
 | REST API | Django REST Framework |
+| AI / LLM | Google Gemini (google-genai) |
+| ML | scikit-learn, numpy, pandas |
 | Weather | OpenWeatherMap API |
 | SMS | Twilio |
 | Auth | django-allauth (Google OAuth + Email OTP) |
 | Charts | Chart.js |
 | Frontend | Vanilla HTML/CSS/JS (dark theme) |
+| Image Processing | Pillow |
 
 ---
 
@@ -105,47 +132,63 @@
 ```
 smart-fish-farm/
 │
-├── accounts/                   # User authentication & security
-│   ├── models.py               # Custom User, OTPToken, UserSession, LoginAttempt
-│   ├── views.py                # Login, Register, OTP verify, Profile, Sessions
-│   ├── forms.py                # LoginForm, RegisterForm, OTPForm, ProfileForm
-│   ├── security.py             # Rate limiting, brute-force, session tracking
-│   ├── backends.py             # Email-based authentication backend
-│   └── middleware.py           # Session activity middleware
+├── accounts/                    # User authentication & security
+│   ├── models.py                # User, OTPToken, UserSession, LoginAttempt
+│   ├── views.py                 # Login, Register, OTP, Profile, Sessions, Delete Data
+│   ├── forms.py                 # LoginForm, RegisterForm, OTPForm, ProfileForm
+│   ├── security.py              # Rate limiting, brute-force lockout, session tracking
+│   ├── backends.py              # Email-based authentication backend
+│   ├── middleware.py            # Session activity middleware
+│   └── urls.py                  # accounts: login, register, profile, delete_all_data ...
 │
-├── farm/                       # Core farm management app
-│   ├── models.py               # Pond, FishBatch, GrowthRecord, WeatherRecord,
-│   │                           # DailyWeather, FeedingProfile, FeedLog,
-│   │                           # FeedingReminder, HarvestRecord, Expense,
-│   │                           # MortalityLog, FarmAlert, PondNote, FarmProfile
-│   ├── views.py                # Dashboard, Batch, Pond, Feed, Weather, Reports
-│   ├── api_views.py            # REST API endpoints (IoT sensor support)
-│   ├── onboarding_views.py     # 4-step farm onboarding flow
-│   ├── onboarding_forms.py     # Onboarding step forms
-│   ├── tasks.py                # Celery tasks (feed alert, auto temperature)
-│   ├── notifications.py        # Email & SMS notification helpers
-│   ├── serializers.py          # DRF serializers for API
-│   ├── bd_geo.py               # Bangladesh district/upazila data
+├── farm/                        # Core farm management app
+│   ├── models.py                # Pond, FishBatch, GrowthRecord, WeatherRecord,
+│   │                            # DailyWeather, FeedingProfile, FeedLog,
+│   │                            # FeedingReminder, SensorReading, HarvestRecord,
+│   │                            # Expense, MortalityLog, FarmAlert, PondNote,
+│   │                            # FarmProfile, PerformanceLog, BenchmarkRun,
+│   │                            # DiseaseLog, DiseaseAlert
+│   ├── views.py                 # Dashboard, Batch, Pond, Feed, Weather, Reports
+│   │                            # (Pond list/detail: public read-only for guests)
+│   ├── ai_agent_views.py        # Fish Doctor — Gemini AI disease diagnosis
+│   ├── api_views.py             # REST API endpoints (IoT sensor support)
+│   ├── api_urls.py              # DRF URL routing
+│   ├── onboarding_views.py      # 4-step farm onboarding flow
+│   ├── onboarding_forms.py      # Onboarding step forms
+│   ├── tasks.py                 # Celery tasks (feed alert, auto temperature, alerts)
+│   ├── notifications.py         # Email & SMS notification helpers
+│   ├── serializers.py           # DRF serializers for API
+│   ├── bd_geo.py                # Bangladesh district/upazila geodata
 │   │
-│   └── services/               # Business logic layer
-│       ├── feed_calculator.py  # Smart feed kg calculation (biomass + temp)
-│       ├── weather_ingest.py   # OpenWeatherMap API integration
-│       ├── growth_prediction.py# Fish growth prediction algorithm
-│       └── analytics.py        # Analytics data processing
+│   └── services/                # Business logic layer
+│       ├── feed_calculator.py   # Smart feed kg calculation (biomass + temp)
+│       ├── weather_ingest.py    # OpenWeatherMap API integration
+│       ├── growth_prediction.py # Fish growth prediction algorithm
+│       ├── ml_prediction.py     # scikit-learn ML prediction models
+│       ├── analytics.py         # Analytics data processing
+│       ├── benchmarking.py      # Farm performance benchmarking
+│       ├── fcr_analytics.py     # Feed Conversion Ratio analytics
+│       ├── predictive_alerts.py # Predictive alert generation
+│       ├── water_heatmap.py     # Water quality heatmap data
+│       └── generate_water_alerts.py # Automated alert generation
 │
-├── smart_fish_farm/            # Django project settings
-│   ├── settings.py
-│   ├── urls.py
-│   ├── celery.py               # Celery app configuration
+├── smart_fish_farm/             # Django project settings
+│   ├── settings.py              # All settings (fully env-based configuration)
+│   ├── urls.py                  # Root URLs + custom 404/500/403 handlers
+│   ├── celery.py                # Celery app configuration
 │   ├── asgi.py
 │   └── wsgi.py
 │
-├── templates/                  # HTML templates
-│   ├── base.html               # Base layout with dark theme
-│   ├── accounts/               # Login, Register, Profile, OTP templates
-│   └── farm/                   # Dashboard, Batch, Pond, Reports templates
+├── templates/                   # HTML templates (dark theme)
+│   ├── base.html                # Base layout, sidebar, guest-aware navigation
+│   ├── 404.html                 # Custom 404 — Page Not Found
+│   ├── 500.html                 # Custom 500 — Server Error
+│   ├── 403.html                 # Custom 403 — Access Denied
+│   ├── accounts/                # Login, Register, Profile, OTP, Sessions
+│   └── farm/                    # Dashboard, Pond, Batch, Reports, AI Doctor
+│       └── onboarding/          # 4-step onboarding templates
 │
-├── static/                     # CSS, JS, images
+├── static/                      # CSS, JS, images, PWA icons
 ├── manage.py
 ├── requirements.txt
 └── .env.example
@@ -160,7 +203,6 @@ smart-fish-farm/
 - Python 3.10+
 - PostgreSQL
 - Redis
-- Docker (optional, for Redis)
 
 ### Installation
 
@@ -186,9 +228,25 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-**4. Copy environment file:**
+**4. Copy and configure environment file:**
 ```bash
 cp .env.example .env
+```
+
+**5. Generate a secure secret key:**
+```bash
+python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+```
+Copy the output and set it as `SECRET_KEY` in your `.env`.
+
+**6. Run migrations:**
+```bash
+python manage.py migrate
+```
+
+**7. Create superuser:**
+```bash
+python manage.py createsuperuser
 ```
 
 ---
@@ -198,39 +256,45 @@ cp .env.example .env
 Edit `.env` with your credentials:
 
 ```env
-# Django
-SECRET_KEY=your-secret-key-here
+# ── Django ────────────────────────────────────────────
+SECRET_KEY=your-secure-random-key-here
 DEBUG=True
+ALLOWED_HOSTS=127.0.0.1,localhost
 
-# Database (PostgreSQL)
+# ── Database (PostgreSQL) ─────────────────────────────
 DB_NAME=smart_fish_farm
 DB_USER=your_db_user
 DB_PASSWORD=your_db_password
 DB_HOST=localhost
 DB_PORT=5432
 
-# Weather API (OpenWeatherMap)
-WEATHER_API_KEY=your_openweathermap_api_key
-WEATHER_LOCATION=Dhaka,BD
+# ── Redis ─────────────────────────────────────────────
+REDIS_CACHE_URL=redis://localhost:6379/1
+CELERY_BROKER_URL=redis://localhost:6379/0
 
-# Email (Gmail SMTP)
+# ── Weather API (OpenWeatherMap) ──────────────────────
+OPENWEATHER_API_KEY=your_openweathermap_api_key
+OPENWEATHER_LOCATION=Dhaka,BD
+
+# ── AI (Google Gemini) ────────────────────────────────
+GOOGLE_API_KEY=your_google_gemini_api_key
+
+# ── Email (Gmail SMTP) ────────────────────────────────
 EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
 EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
 EMAIL_USE_TLS=True
 EMAIL_HOST_USER=your_email@gmail.com
 EMAIL_HOST_PASSWORD=your_gmail_app_password
-
-# Farm Notification
 FARM_NOTIFICATION_EMAIL=your_email@gmail.com
 
-# Twilio SMS (optional)
+# ── Twilio SMS (optional) ─────────────────────────────
 TWILIO_ACCOUNT_SID=your_twilio_sid
 TWILIO_AUTH_TOKEN=your_twilio_token
 TWILIO_FROM_NUMBER=+1234567890
-FARM_PHONE_NUMBER=+8801XXXXXXXXX
+TWILIO_TO_NUMBER=+8801XXXXXXXXX
 
-# Google OAuth (optional)
+# ── Google OAuth (optional) ───────────────────────────
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 ```
@@ -242,8 +306,8 @@ GOOGLE_CLIENT_SECRET=your_google_client_secret
 Start all required services in **4 separate terminals**:
 
 ```bash
-# Terminal 1 — Redis (via Docker)
-docker run -p 6379:6379 redis
+# Terminal 1 — Redis
+redis-server
 
 # Terminal 2 — Celery Worker
 python -m celery -A smart_fish_farm worker -l info -P solo
@@ -252,8 +316,6 @@ python -m celery -A smart_fish_farm worker -l info -P solo
 python -m celery -A smart_fish_farm beat -l info
 
 # Terminal 4 — Django Development Server
-python manage.py migrate
-python manage.py createsuperuser
 python manage.py runserver
 ```
 
@@ -267,15 +329,15 @@ Open in browser:
 
 Base URL: `http://127.0.0.1:8000/api/`
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/ponds/` | GET, POST | List / create ponds |
-| `/api/batches/` | GET, POST | List / create fish batches |
-| `/api/batches/<pk>/` | GET | Batch detail |
-| `/api/batches/<pk>/prediction/` | GET | AI growth prediction |
-| `/api/growth-records/` | GET, POST | Growth records |
-| `/api/weather-records/` | GET, POST | Water quality records (IoT) |
-| `/api/feed-logs/` | GET, POST | Feed logs |
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/api/ponds/` | GET, POST | Optional / Required | List / create ponds |
+| `/api/batches/` | GET, POST | Optional / Required | List / create fish batches |
+| `/api/batches/<pk>/` | GET | Optional | Batch detail |
+| `/api/batches/<pk>/prediction/` | GET | Optional | ML growth prediction |
+| `/api/growth-records/` | GET, POST | Optional / Required | Growth records |
+| `/api/weather-records/` | GET, POST | Optional / Required | Water quality (IoT) |
+| `/api/feed-logs/` | GET, POST | Optional / Required | Feed logs |
 
 ### IoT Sensor Example
 
@@ -301,15 +363,12 @@ Alerts are automatically triggered if values are out of safe range.
 
 ### Smart Feed Calculation
 
-Feed amount is calculated using:
-
 ```
-Biomass (kg) = Surviving Fish Count × Avg Weight (g) ÷ 1000
+Biomass (kg) = Surviving Fish × Avg Weight (g) ÷ 1000
 Base Feed    = Biomass × Feed Rate % (from FeedingProfile)
 Final Feed   = Base Feed × Temperature Factor
 ```
 
-Temperature factors:
 | Temperature | Factor |
 |-------------|--------|
 | < 18°C | 0.10 (minimal) |
@@ -320,8 +379,8 @@ Temperature factors:
 
 ### Water Quality Safe Ranges
 
-| Parameter | Safe Range | Alert Level |
-|-----------|-----------|-------------|
+| Parameter | Safe Range | Alert Threshold |
+|-----------|-----------|-----------------|
 | Dissolved Oxygen | > 5.0 mg/L | < 4.0 = Critical |
 | Water Temperature | 22–31°C | > 34°C = Critical |
 | pH | 6.5–9.0 | Outside = Warning |
@@ -330,16 +389,34 @@ Temperature factors:
 
 ## ⏰ Automated Tasks
 
-Powered by **Celery Beat** — runs automatically every day:
+Powered by **Celery Beat** — runs automatically:
 
-| Time | Task |
-|------|------|
-| 6:00 AM | 📧 Daily feed alert email with schedule |
-| 9:00 AM | 🌡️ Auto water temperature logging for all ponds |
+| Schedule | Task |
+|----------|------|
+| 6:00 AM daily | 📧 Daily feed alert email with schedule |
+| 9:00 AM daily | 🌡️ Auto water temperature logging for all ponds |
+| Every hour | 🔔 Predictive alert generation |
 
 ---
 
-## 👥 User Roles
+## 🔐 Security
+
+| Feature | Details |
+|---------|---------|
+| Brute-force protection | 5 failed attempts → 15-minute lockout (per IP + email) |
+| Two-Factor Auth | Email OTP, 10-minute expiry |
+| Google OAuth | django-allauth with PKCE enabled |
+| Session tracking | Active session list with remote revocation |
+| CSRF protection | Enabled on all POST endpoints |
+| Danger Zone | Hard delete all data — requires typing `DELETE` + password |
+| Google OAuth delete | Password-less delete — active session confirms identity |
+| Custom error pages | 403 / 404 / 500 pages (active when DEBUG=False) |
+
+---
+
+## 👥 User Roles & Guest Access
+
+### User Roles
 
 | Role | Access |
 |------|--------|
@@ -347,6 +424,18 @@ Powered by **Celery Beat** — runs automatically every day:
 | Manager | Farm management |
 | Worker | Log feed, growth, mortality |
 | Viewer | Read-only dashboard |
+
+### Guest Access
+
+| Section | Guest | Logged-in |
+|---------|-------|-----------|
+| Dashboard | ✅ View | ✅ Full |
+| Ponds (list + detail) | ✅ Read-only | ✅ Full |
+| Harvests / Expenses / P&L | ✅ Read-only | ✅ Full |
+| Alerts / Reports / Reminders | ✅ Read-only | ✅ Full |
+| Add / Edit / Delete anything | 🔒 Login required | ✅ |
+| Analytics Dashboard | 🔒 Login required | ✅ |
+| Fish Doctor (AI) | 🔒 Login required | ✅ |
 
 ---
 
@@ -357,5 +446,5 @@ This project is developed for academic research purposes at **Daffodil Internati
 ---
 
 <p align="center">
-  Built with ❤️ by <a href="https://github.com/Sadman-Devx">Sadman Sakib</a>
+  Built by <a href="https://github.com/Sadman-Devx">Sadman Sakib</a>
 </p>

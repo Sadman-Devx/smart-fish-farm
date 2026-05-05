@@ -184,12 +184,13 @@
 <div class="card" style="margin-bottom:16px">
   <div class="card-header"><span class="card-title">Harvests This Month</span></div>
   <div class="table-responsive">
-    <table class="table">
+    <table class="table harvests-this-month-table">
       <thead>
         <tr>
-          <th>Date</th><th>Batch</th>
-          <th class="text-end">kg</th>
-          <th class="text-end">Price/kg</th>
+          <th>Date</th>
+          <th>Batch</th>
+          <th>kg</th>          
+          <th>Price/kg</th>    
           <th class="text-end">Revenue (Tk)</th>
         </tr>
       </thead>
@@ -198,8 +199,8 @@
         <tr>
           <td class="text-muted fs-sm">{{ h.harvest_date }}</td>
           <td><a href="{% url 'farm:batch_detail' h.batch.pk %}" style="color:var(--accent2)">{{ h.batch }}</a></td>
-          <td class="text-end">{{ h.total_weight_kg|floatformat:2 }}</td>
-          <td class="text-end text-muted">{{ h.price_per_kg|floatformat:2 }}</td>
+          <td>{{ h.total_weight_kg|floatformat:2 }}</td>          
+          <td class="text-muted">{{ h.price_per_kg|floatformat:2 }}</td>  
           <td class="text-end fw-bold" style="color:var(--success)">{{ h.gross_revenue|floatformat:0 }}</td>
         </tr>
         {% endfor %}

@@ -57,6 +57,14 @@ class WeatherRecordForm(UserScopedFormMixin, forms.ModelForm):
 class GrowthRecordForm(UserScopedFormMixin, forms.ModelForm):
     batch_fields = ["batch"]
 
+    date = forms.DateField(
+        widget=forms.DateInput(
+            format="%Y-%m-%d",
+            attrs={"type": "date", "lang": "en-GB"},
+        ),
+        input_formats=["%d/%m/%Y", "%Y-%m-%d"],
+    )
+
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._limit_to_user(user)
@@ -64,7 +72,6 @@ class GrowthRecordForm(UserScopedFormMixin, forms.ModelForm):
     class Meta:
         model   = GrowthRecord
         fields  = ["batch", "date", "surviving_count", "avg_weight_g"]
-        widgets = {"date": forms.DateInput(attrs={"type": "date"})}
 
 
 # ── FeedLogForm ───────────────────────────────────────────────────────────────

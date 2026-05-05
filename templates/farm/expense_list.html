@@ -21,7 +21,7 @@
       <div style="margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;margin-bottom:4px">
           <span class="fs-sm">{{ row.category|title }}</span>
-          <span class="fs-sm fw-bold" style="color:var(--accent)">৳ {{ row.total|floatformat:0 }}</span>
+          <span class="fs-sm fw-bold" style="color:var(--accent)">Tk {{ row.total|floatformat:0 }}</span>
         </div>
         <div class="progress-bar" style="height:6px">
           <div class="progress-fill" style="width:{% widthratio row.total total 100 %}%;background:var(--accent2)"></div>
@@ -35,7 +35,7 @@
 
   <div class="kpi-card k-orange" style="display:flex;flex-direction:column;justify-content:center">
     <div class="kpi-label">Total Expenses</div>
-    <div class="kpi-value" style="font-size:28px">৳ {{ total|floatformat:0 }}</div>
+    <div class="kpi-value" style="font-size:28px">Tk {{ total|floatformat:0 }}</div>
     <div class="kpi-meta">All time</div>
   </div>
 </div>
@@ -51,7 +51,7 @@
   <div class="table-responsive">
     <table class="table batch-all-expenses">
       <thead>
-        <tr><th>Date</th><th>Category</th><th>Description</th><th>Pond</th><th class="text-end">Amount (৳)</th></tr>
+        <tr><th>Date</th><th>Category</th><th>Description</th><th>Pond</th><th class="text-end">Amount (Tk)</th></tr>
       </thead>
       <tbody>
         {% for exp in expenses %}
@@ -64,7 +64,7 @@
           </td>
           <td>{{ exp.description }}</td>
           <td class="text-muted fs-sm">{{ exp.pond.name|default:"Farm-wide" }}</td>
-          <td class="text-end fw-bold" style="color:var(--accent3)">{{ exp.amount|floatformat:2 }}</td>
+          <td class="text-end fw-bold" style="color:var(--accent3)">Tk {{ exp.amount|floatformat:2 }}</td>
         </tr>
         {% endfor %}
       </tbody>

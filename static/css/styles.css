@@ -752,6 +752,18 @@ body > main {
   white-space: nowrap;
 }
 
+/* Column 2, 3, 4 — center align */
+.harvests-this-month-table th:nth-child(3),
+.harvests-this-month-table td:nth-child(3),
+.harvests-this-month-table th:nth-child(4),
+.harvests-this-month-table td:nth-child(4),
+.harvests-this-month-table th:last-child,
+.harvests-this-month-table td:last-child {
+  width:       300px;
+  text-align:  center !important;  /* Bootstrap text-end override */
+  white-space: nowrap;
+}
+
 /* ══════════════════════════════════════════════════════════════
    14. Batch Items & Lists
    ══════════════════════════════════════════════════════════════ */
@@ -1258,6 +1270,56 @@ select option {
     -webkit-box-orient:  vertical;
   }
 
+  /* ── সব fixed-layout table → auto ── */
+  .profit-loss-transactions-table,
+  .profit-loss-expenses-table,
+  .batch-feed-history-table,
+  .batch-all-expenses {
+    table-layout: auto !important;
+  }
+
+  /* ── সব hardcoded column width override ── */
+  .profit-loss-transactions-table th,
+  .profit-loss-transactions-table td,
+  .profit-loss-expenses-table th,
+  .profit-loss-expenses-table td,
+  .batch-all-expenses th,
+  .batch-all-expenses td,
+  .batch-feed-history-table th,
+  .batch-feed-history-table td {
+    width:       auto !important;
+    min-width:   0    !important;
+    white-space: nowrap;
+  }
+
+  /* ── Description/text column wrap ── */
+  .profit-loss-transactions-table td:nth-child(3),
+  .profit-loss-expenses-table td:nth-child(3),
+  .batch-all-expenses td:nth-child(3) {
+    white-space: normal;
+    word-break:  break-word;
+    max-width:   90px;
+  }
+
+  /* ── Amount column ── */
+  .profit-loss-transactions-table th:nth-child(4),
+  .profit-loss-transactions-table td:nth-child(4),
+  .profit-loss-expenses-table th:nth-child(4),
+  .profit-loss-expenses-table td:nth-child(4),
+  .batch-all-expenses th:nth-child(5),
+  .batch-all-expenses td:nth-child(5) {
+    min-width:   80px;
+    white-space: nowrap;
+  }
+
+  /* ── Pond column (batch-all-expenses) ── */
+  .batch-all-expenses td:nth-child(4),
+  .batch-all-expenses th:nth-child(4) {
+    max-width:     70px;
+    overflow:      hidden;
+    text-overflow: ellipsis;
+  }
+
   .kpi-grid  { grid-template-columns: 0.7fr .7fr .7fr; gap: 8px; }
   .kpi-value { font-size: 16px; }
   .kpi-label { font-size:  9px; }
@@ -1304,9 +1366,9 @@ select option {
   }
   .topbar-actions::-webkit-scrollbar { display: none; }
 
-  .btn        { font-size: 11px; padding: 5px 10px; }
+  .btn         { font-size: 11px; padding: 5px 10px; }
   .alert-strip { font-size: 11px; padding: 8px 11px; }
-  .nav-item   { font-size: 11px; padding: 7px 8px; }
+  .nav-item    { font-size: 11px; padding: 7px 8px; }
 
   .fs-sm { font-size: 10px; }
   .fs-xs { font-size:  9px; }
