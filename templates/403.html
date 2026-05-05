@@ -1,0 +1,109 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>403 — Access Denied | AquaSmart</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <style>
+    body {
+      background: var(--bg);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      font-family: 'Space Grotesk', sans-serif;
+    }
+    .error-wrap { text-align: center; max-width: 480px; width: 100%; }
+    .error-code {
+      font-family: 'Syne', sans-serif;
+      font-size: 120px;
+      font-weight: 800;
+      line-height: 1;
+      background: linear-gradient(135deg, #f59e0b, #ef4444);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+    }
+    .error-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--text);
+      margin-bottom: 10px;
+    }
+    .error-desc {
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.6;
+      margin-bottom: 32px;
+    }
+    .error-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn-login {
+      padding: 12px 28px;
+      background: var(--accent);
+      color: #0a1628;
+      font-family: 'Syne', sans-serif;
+      font-size: 14px;
+      font-weight: 800;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: opacity .15s;
+    }
+    .btn-login:hover { opacity: .85; }
+    .btn-home {
+      padding: 12px 28px;
+      background: var(--surface2);
+      color: var(--muted);
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all .15s;
+    }
+    .btn-home:hover { color: var(--text); border-color: var(--accent2); }
+    .lock-icon {
+      font-size: 48px;
+      display: inline-block;
+      animation: shake 4s ease-in-out infinite;
+      margin-bottom: 20px;
+    }
+    @keyframes shake {
+      0%, 85%, 100% { transform: rotate(0deg); }
+      88%            { transform: rotate(-8deg); }
+      92%            { transform: rotate(8deg); }
+      96%            { transform: rotate(-4deg); }
+      98%            { transform: rotate(4deg); }
+    }
+  </style>
+</head>
+<body>
+<div class="error-wrap">
+  <div class="lock-icon">🔒</div>
+  <div class="error-code">403</div>
+  <div class="error-title">Access Denied</div>
+  <p class="error-desc">
+    এই পেজটি দেখার অনুমতি আপনার নেই।
+    Login করলে এই সমস্যার সমাধান হতে পারে।
+  </p>
+  <div class="error-actions">
+    <a href="/accounts/login/" class="btn-login">🔑 Sign In</a>
+    <a href="/" class="btn-home">🏠 Go to Dashboard</a>
+  </div>
+</div>
+</body>
+</html>

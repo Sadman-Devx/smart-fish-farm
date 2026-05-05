@@ -52,7 +52,18 @@
     /* Divider */
     .divider { display: flex; align-items: center; gap: 10px; margin: 20px 0; }
     .divider-line { flex: 1; height: 1px; background: var(--border); }
-    .divider-text { font-size: 11px; color: var(--muted); white-space: nowrap; }
+    .divider-text {
+      font-size: 12px; color: var(--accent); white-space: nowrap;
+      cursor: pointer; font-weight: 600;
+      padding: 4px 10px; border-radius: 20px;
+      border: 1px solid rgba(0,229,180,.3);
+      transition: all .2s;
+      user-select: none;
+    }
+    .divider-text:hover {
+      background: rgba(0,229,180,.1);
+      border-color: var(--accent);
+    }
 
     /* Manual location fields */
     .manual-section { display: none; }
@@ -140,10 +151,10 @@
       </div>
       {% endif %}
 
-      {# Divider #}
+      {# Divider — clicking it immediately shows manual fields #}
       <div class="divider">
         <div class="divider-line"></div>
-        <span class="divider-text">or choose manually</span>
+        <span class="divider-text" id="manualToggle" onclick="showManual()">or choose manually</span>
         <div class="divider-line"></div>
       </div>
 
@@ -195,6 +206,26 @@
 </div>
 
 <script>
+// Global scope — accessible from onclick attribute
+function showManual() {
+  var hidLat        = document.getElementById('hidLat');
+  var hidLng        = document.getElementById('hidLng');
+  var hidMethod     = document.getElementById('hidMethod');
+  var manualSection = document.getElementById('manualSection');
+  var statusDetect  = document.getElementById('statusDetecting');
+  var statusSuccess = document.getElementById('statusSuccess');
+  var statusDenied  = document.getElementById('statusDenied');
+
+  hidLat.value    = '';
+  hidLng.value    = '';
+  hidMethod.value = 'manual';
+  manualSection.classList.add('visible');
+  statusDetect.style.display  = 'none';
+  statusSuccess.style.display = 'none';
+  statusDenied.style.display  = 'none';
+  manualSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
 (function () {
   var gpsBtn        = document.getElementById('gpsBtn');
   var hidLat        = document.getElementById('hidLat');

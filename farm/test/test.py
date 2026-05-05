@@ -168,11 +168,10 @@ class GuestAccessTests(TestCase):
         resp = self._get("dashboard")
         self.assertEqual(resp.status_code, 200, "Dashboard must be public")
 
-    # FIX-1: pond_list requires @login_required → 302 for guests
     def test_pond_list_accessible_to_guest(self):
         resp = self._get("pond_list")
-        self.assertEqual(resp.status_code, 302,
-                         "pond_list requires login; guests must be redirected")
+        self.assertEqual(resp.status_code, 200,
+                         "pond_list is public; guests should see an empty list")
 
     # FIX-1: pond_detail requires @login_required → 302 for guests
     def test_pond_detail_accessible_to_guest(self):

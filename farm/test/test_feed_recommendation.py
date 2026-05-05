@@ -429,21 +429,23 @@ class DashboardRecommendedFeedTests(TestCase):
         """
         FIX-B: 300 kg biomass × 3% rate × 1.0 factor (at 26°C) = 9.00 kg.
 
-        _profile() in setUp already cleared stale profiles and created a
-        fresh 18–35°C @ 3% profile. No DailyWeather or WeatherRecord →
-        calculator uses DEFAULT_TEMP_C=26°C → factor=1.0.
-        300 × 0.03 × 1.0 = 9.0 kg (within delta=0.5).
+        Root-cause of the stubborn 6.3 result:
+        ─────────────────────────────────────────────────────────────────
+        dashboard() calls get_or_update_daily_weather() at the very top.
+        When no DailyWeather row exists in the DB, that function hits the
+        live OpenWeather API and **saves a new DailyWeather** (e.g. 25°C
+        for Bangladesh).  smart_feed_kg_for_batch() then finds that row and
+        uses 25°C → factor=0.70 → 300×0.03×0.70 = 6.3 kg, not 9.0.
 
-        IMPORTANT: dashboard() caches its rendered response per-user for
-        5 minutes. A previous test in this class that called _dashboard()
-        with different weather data may have populated that cache. We must
-        clear ALL caches before calling the dashboard here.
+        Fix: mock get_or_update_daily_weather to return None so no API call
+        is made and no DailyWeather is written. The calculator then falls
+        back to DEFAULT_TEMP_C=26°C → factor=1.0 → 9.0 kg as expected.
         """
         DailyWeather.objects.all().delete()
         WeatherRecord.objects.all().delete()
-        # _dashboard() calls _clear_farm_cache() internally — no extra clear needed.
 
-        resp        = self._dashboard()
+        with patch("farm.views.get_or_update_daily_weather", return_value=None):
+            resp = self._dashboard()
         recommended = resp.context["recommended_feed_today_kg"]
         self.assertAlmostEqual(
             recommended, 9.0, delta=0.5,
