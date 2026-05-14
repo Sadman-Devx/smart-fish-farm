@@ -8,80 +8,193 @@
 
 {% block content %}
 
-{# ── Summary KPI cards ── #}
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px">
-  <div class="card" style="padding:16px 18px">
-    <div class="kpi-label">Total Logs</div>
-    <div class="kpi-value" style="font-size:1.6rem">{{ total_logs }}</div>
-    <div class="kpi-meta">matching records</div>
+<style>
+  .fh-kpi-strip {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .fh-kpi {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .fh-kpi__label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .fh-kpi__value {
+    font-size: 1.45rem;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.1;
+  }
+  .fh-kpi__meta { font-size: 10px; color: var(--muted); }
+
+  .fh-filter-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .fh-filter-grid .fh-full { grid-column: 1 / -1; }
+
+  .fh-label {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 5px;
+    font-weight: 500;
+    letter-spacing: .03em;
+  }
+
+  .fh-active-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .fh-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(45,212,191,.12);
+    color: var(--accent);
+    border: 1px solid rgba(45,212,191,.25);
+    border-radius: 20px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  /* Mobile card list — hidden on desktop */
+  .fh-card-list { display: none; }
+
+  .fh-log-card {
+    padding: 13px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .fh-log-card:last-child { border-bottom: none; }
+  .fh-log-card__top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .fh-log-card__date { font-size: 11px; color: var(--muted); font-weight: 500; }
+  .fh-log-card__kg   { font-size: 1.15rem; font-weight: 700; color: var(--accent2); }
+  .fh-log-card__batch { font-size: 13px; font-weight: 600; color: var(--accent2); text-decoration: none; }
+  .fh-log-card__pond  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  .fh-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 14px;
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .fh-page-info { font-size: 12px; color: var(--muted); padding: 0 6px; }
+
+  @media (max-width: 600px) {
+    .fh-kpi-strip  { gap: 8px; }
+    .fh-kpi        { padding: 10px 12px; border-radius: 10px; }
+    .fh-kpi__value { font-size: 1.2rem; }
+    .fh-desktop-table { display: none !important; }
+    .fh-card-list     { display: block; }
+  }
+  @media (max-width: 380px) {
+    .fh-kpi__value { font-size: 1rem; }
+    .fh-kpi__label { font-size: 9px; }
+  }
+</style>
+
+{# KPI Strip #}
+<div class="fh-kpi-strip">
+  <div class="fh-kpi">
+    <span class="fh-kpi__label">Records</span>
+    <span class="fh-kpi__value">{{ total_logs }}</span>
+    <span class="fh-kpi__meta">total logs</span>
   </div>
-  <div class="card" style="padding:16px 18px">
-    <div class="kpi-label">Total Feed Given</div>
-    <div class="kpi-value" style="font-size:1.6rem;color:var(--accent2)">{{ total_kg|floatformat:2 }}</div>
-    <div class="kpi-meta">kg (filtered range)</div>
+  <div class="fh-kpi">
+    <span class="fh-kpi__label">Feed Given</span>
+    <span class="fh-kpi__value" style="color:var(--accent2)">{{ total_kg|floatformat:1 }}</span>
+    <span class="fh-kpi__meta">kg total</span>
   </div>
-  <div class="card" style="padding:16px 18px">
-    <div class="kpi-label">Current Page</div>
-    <div class="kpi-value" style="font-size:1.6rem">{{ page_obj.number }}</div>
-    <div class="kpi-meta">of {{ page_obj.paginator.num_pages }} pages</div>
+  <div class="fh-kpi">
+    <span class="fh-kpi__label">Page</span>
+    <span class="fh-kpi__value">{{ page_obj.number }}<small style="font-size:.7rem;color:var(--muted);font-weight:400">/{{ page_obj.paginator.num_pages }}</small></span>
+    <span class="fh-kpi__meta">of {{ page_obj.paginator.num_pages }}</span>
   </div>
 </div>
 
-{# ── Filter form ── #}
-<div class="card" style="margin-bottom:20px">
+{# Filter card #}
+<div class="card" style="margin-bottom:16px">
   <div class="card-header">
-    <span class="card-title">🔍 Filter Records</span>
+    <span class="card-title">🔍 Filter</span>
     {% if f_date_from or f_date_to or f_batch or f_mode %}
-      <a href="{% url 'farm:feed_history' %}" class="btn btn-sm" style="opacity:.7;font-size:0.75rem">✕ Clear Filters</a>
+      <a href="{% url 'farm:feed_history' %}" class="btn btn-sm"
+         style="font-size:11px;padding:4px 10px;color:var(--danger);border-color:rgba(239,68,68,.3)">✕ Clear</a>
     {% endif %}
   </div>
-  <div class="card-body" style="padding:14px 16px">
+
+  {% if f_date_from or f_date_to or f_batch or f_mode %}
+  <div class="fh-active-filters">
+    {% if f_date_from %}<span class="fh-pill">From: {{ f_date_from }}</span>{% endif %}
+    {% if f_date_to   %}<span class="fh-pill">To: {{ f_date_to }}</span>{% endif %}
+    {% if f_batch %}{% for b in user_batches %}{% if b.pk|stringformat:"s" == f_batch %}<span class="fh-pill">{{ b }}</span>{% endif %}{% endfor %}{% endif %}
+    {% if f_mode == "auto"   %}<span class="fh-pill">Auto only</span>{% endif %}
+    {% if f_mode == "manual" %}<span class="fh-pill">Manual only</span>{% endif %}
+  </div>
+  {% endif %}
+
+  <div class="card-body" style="padding:14px">
     <form method="get" action="{% url 'farm:feed_history' %}">
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;align-items:end">
-
+      <div class="fh-filter-grid">
         <div>
-          <label class="form-label fs-sm">From Date</label>
-          <input type="date" name="date_from" class="form-control form-control-sm"
-                 value="{{ f_date_from }}">
+          <label class="fh-label">From Date</label>
+          <input type="date" name="date_from" class="form-control form-control-sm" value="{{ f_date_from }}" style="width:100%">
         </div>
-
         <div>
-          <label class="form-label fs-sm">To Date</label>
-          <input type="date" name="date_to" class="form-control form-control-sm"
-                 value="{{ f_date_to }}">
+          <label class="fh-label">To Date</label>
+          <input type="date" name="date_to" class="form-control form-control-sm" value="{{ f_date_to }}" style="width:100%">
         </div>
-
         <div>
-          <label class="form-label fs-sm">Batch</label>
-          <select name="batch" class="form-select form-select-sm">
+          <label class="fh-label">Batch</label>
+          <select name="batch" class="form-select form-select-sm" style="width:100%">
             <option value="">All Batches</option>
             {% for b in user_batches %}
-              <option value="{{ b.pk }}" {% if f_batch == b.pk|stringformat:"s" %}selected{% endif %}>
-                {{ b }} 
-              </option>
+              <option value="{{ b.pk }}" {% if f_batch == b.pk|stringformat:"s" %}selected{% endif %}>{{ b }}</option>
             {% endfor %}
           </select>
         </div>
-
         <div>
-          <label class="form-label fs-sm">Mode</label>
-          <select name="mode" class="form-select form-select-sm">
-            <option value=""   {% if not f_mode %}selected{% endif %}>All</option>
-            <option value="auto"   {% if f_mode == "auto" %}selected{% endif %}>Auto‑Calculated</option>
-            <option value="manual" {% if f_mode == "manual" %}selected{% endif %}>Manual Entry</option>
+          <label class="fh-label">Mode</label>
+          <select name="mode" class="form-select form-select-sm" style="width:100%">
+            <option value=""       {% if not f_mode          %}selected{% endif %}>All</option>
+            <option value="auto"   {% if f_mode == "auto"    %}selected{% endif %}>Auto</option>
+            <option value="manual" {% if f_mode == "manual"  %}selected{% endif %}>Manual</option>
           </select>
         </div>
-
-        <div style="display:flex;gap:8px;align-items:center;margin-top:2px">
-          <button type="submit" class="btn btn-accent btn-sm" style="width:100%">Apply</button>
+        <div class="fh-full" style="margin-top:2px">
+          <button type="submit" class="btn btn-accent btn-sm" style="width:100%;padding:9px">Apply Filter</button>
         </div>
-
       </div>
     </form>
   </div>
 </div>
 
-{# ── Feed log table ── #}
+{# Records #}
 <div class="card">
   <div class="card-header">
     <span class="card-title">📋 All Feed Records</span>
@@ -89,39 +202,29 @@
   </div>
 
   {% if page_obj.object_list %}
-  <div class="table-responsive">
+
+  {# Desktop table #}
+  <div class="table-responsive fh-desktop-table">
     <table class="table dashboard-feed-table">
       <thead>
         <tr>
           <th>Date</th>
           <th>Batch</th>
           <th>Pond</th>
-          <th class="text-end">Feed Given (kg)</th>
+          <th class="text-end">Feed (kg)</th>
           <th class="text-end">Mode</th>
         </tr>
       </thead>
       <tbody>
         {% for log in page_obj %}
         <tr>
-          <td class="text-muted fs-sm" style="white-space:nowrap">
-            {{ log.date|date:"j M Y" }}
-          </td>
-          <td>
-            <a href="{% url 'farm:batch_detail' log.batch.pk %}"
-               style="color:var(--accent2);font-weight:500">
-              {{ log.batch }}
-            </a>
-          </td>
+          <td class="text-muted fs-sm" style="white-space:nowrap">{{ log.date|date:"j M Y" }}</td>
+          <td><a href="{% url 'farm:batch_detail' log.batch.pk %}" style="color:var(--accent2);font-weight:500">{{ log.batch }}</a></td>
           <td class="text-muted fs-sm">{{ log.batch.pond }}</td>
-          <td class="text-end fw-bold" style="color:var(--accent2)">
-            {{ log.feed_amount_kg|floatformat:2 }}
-          </td>
+          <td class="text-end fw-bold" style="color:var(--accent2)">{{ log.feed_amount_kg|floatformat:2 }}</td>
           <td class="text-end">
-            {% if log.auto_calculated %}
-              <span class="badge badge-success">Auto</span>
-            {% else %}
-              <span class="badge badge-secondary">Manual</span>
-            {% endif %}
+            {% if log.auto_calculated %}<span class="badge badge-success">Auto</span>
+            {% else %}<span class="badge badge-secondary">Manual</span>{% endif %}
           </td>
         </tr>
         {% endfor %}
@@ -129,41 +232,53 @@
     </table>
   </div>
 
-  {# ── Pagination controls ── #}
+  {# Mobile card list #}
+  <div class="fh-card-list">
+    {% for log in page_obj %}
+    <div class="fh-log-card">
+      <div class="fh-log-card__top">
+        <span class="fh-log-card__date">📅 {{ log.date|date:"j M Y" }}</span>
+        <span class="fh-log-card__kg">{{ log.feed_amount_kg|floatformat:2 }} kg</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <a href="{% url 'farm:batch_detail' log.batch.pk %}" class="fh-log-card__batch">{{ log.batch }}</a>
+          <div class="fh-log-card__pond">🏞 {{ log.batch.pond }}</div>
+        </div>
+        {% if log.auto_calculated %}<span class="badge badge-success">Auto</span>
+        {% else %}<span class="badge badge-secondary">Manual</span>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# Pagination #}
   {% if page_obj.paginator.num_pages > 1 %}
-  <div style="display:flex;justify-content:center;align-items:center;gap:8px;padding:14px 16px;border-top:1px solid var(--border)">
-
+  <div class="fh-pagination">
     {% if page_obj.has_previous %}
-      <a href="?{% if f_date_from %}date_from={{ f_date_from }}&{% endif %}{% if f_date_to %}date_to={{ f_date_to }}&{% endif %}{% if f_batch %}batch={{ f_batch }}&{% endif %}{% if f_mode %}mode={{ f_mode }}&{% endif %}page=1"
-         class="btn btn-sm">« First</a>
-      <a href="?{% if f_date_from %}date_from={{ f_date_from }}&{% endif %}{% if f_date_to %}date_to={{ f_date_to }}&{% endif %}{% if f_batch %}batch={{ f_batch }}&{% endif %}{% if f_mode %}mode={{ f_mode }}&{% endif %}page={{ page_obj.previous_page_number }}"
-         class="btn btn-sm">‹ Prev</a>
+      <a href="?{% if f_date_from %}date_from={{ f_date_from }}&{% endif %}{% if f_date_to %}date_to={{ f_date_to }}&{% endif %}{% if f_batch %}batch={{ f_batch }}&{% endif %}{% if f_mode %}mode={{ f_mode }}&{% endif %}page=1" class="btn btn-sm">«</a>
+      <a href="?{% if f_date_from %}date_from={{ f_date_from }}&{% endif %}{% if f_date_to %}date_to={{ f_date_to }}&{% endif %}{% if f_batch %}batch={{ f_batch }}&{% endif %}{% if f_mode %}mode={{ f_mode }}&{% endif %}page={{ page_obj.previous_page_number }}" class="btn btn-sm">‹ Prev</a>
     {% endif %}
-
-    <span class="fs-sm text-muted" style="padding:0 8px">
-      Page {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
-    </span>
-
+    <span class="fh-page-info">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
     {% if page_obj.has_next %}
-      <a href="?{% if f_date_from %}date_from={{ f_date_from }}&{% endif %}{% if f_date_to %}date_to={{ f_date_to }}&{% endif %}{% if f_batch %}batch={{ f_batch }}&{% endif %}{% if f_mode %}mode={{ f_mode }}&{% endif %}page={{ page_obj.next_page_number }}"
-         class="btn btn-sm">Next ›</a>
-      <a href="?{% if f_date_from %}date_from={{ f_date_from }}&{% endif %}{% if f_date_to %}date_to={{ f_date_to }}&{% endif %}{% if f_batch %}batch={{ f_batch }}&{% endif %}{% if f_mode %}mode={{ f_mode }}&{% endif %}page={{ page_obj.paginator.num_pages }}"
-         class="btn btn-sm">Last »</a>
+      <a href="?{% if f_date_from %}date_from={{ f_date_from }}&{% endif %}{% if f_date_to %}date_to={{ f_date_to }}&{% endif %}{% if f_batch %}batch={{ f_batch }}&{% endif %}{% if f_mode %}mode={{ f_mode }}&{% endif %}page={{ page_obj.next_page_number }}" class="btn btn-sm">Next ›</a>
+      <a href="?{% if f_date_from %}date_from={{ f_date_from }}&{% endif %}{% if f_date_to %}date_to={{ f_date_to }}&{% endif %}{% if f_batch %}batch={{ f_batch }}&{% endif %}{% if f_mode %}mode={{ f_mode }}&{% endif %}page={{ page_obj.paginator.num_pages }}" class="btn btn-sm">»</a>
     {% endif %}
-
   </div>
   {% endif %}
 
   {% else %}
-  <div class="card-body">
-    <p class="text-muted fs-sm">
-      {% if f_date_from or f_date_to or f_batch or f_mode %}
-        No records found. Please change the filters and try again.
-      {% else %}
-        There is no feed log yet.
-        <a href="{% url 'farm:feed_log_create' %}">Create Feed Log →</a>
-      {% endif %}
+  <div class="card-body" style="text-align:center;padding:36px 16px">
+    <div style="font-size:2rem;margin-bottom:8px">🐟</div>
+    <p class="text-muted fs-sm" style="margin-bottom:12px">
+      {% if f_date_from or f_date_to or f_batch or f_mode %}There are no records in this filter.
+      {% else %}There are no feed logs yet.{% endif %}
     </p>
+    {% if f_date_from or f_date_to or f_batch or f_mode %}
+      <a href="{% url 'farm:feed_history' %}" class="btn btn-sm">✕ Clear Filters</a>
+    {% else %}
+      <a href="{% url 'farm:feed_log_create' %}" class="btn btn-accent btn-sm">+ Log Feed Now</a>
+    {% endif %}
   </div>
   {% endif %}
 </div>
