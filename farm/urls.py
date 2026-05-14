@@ -43,6 +43,7 @@ urlpatterns = [
     path("weather/add/",              views.weather_create,    name="weather_create"),
     path("growth/add/",               views.growth_create,     name="growth_create"),
     path("feed/add/",                 views.feed_log_create,   name="feed_log_create"),
+    path("feed/history/",             views.feed_history,      name="feed_history"),
     path("mortality/add/",            views.mortality_create,  name="mortality_create"),
 
     # ── Harvest & Expenses ─────────────────────────────────────────────────────

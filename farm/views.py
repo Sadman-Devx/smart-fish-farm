@@ -1006,6 +1006,65 @@ def growth_create(request):
 
 
 @login_required
+def feed_history(request):
+    """Full paginated feed log history with date/batch filtering."""
+    from django.core.paginator import Paginator
+
+    qs = _user_feed_logs(request.user).select_related("batch", "batch__pond")
+
+    # ── Filters ──────────────────────────────────────────────────────────────
+    date_from  = request.GET.get("date_from", "").strip()
+    date_to    = request.GET.get("date_to", "").strip()
+    batch_id   = request.GET.get("batch", "").strip()
+    mode       = request.GET.get("mode", "").strip()   # "auto" | "manual"
+
+    if date_from:
+        try:
+            qs = qs.filter(date__gte=date_from)
+        except Exception:
+            pass
+    if date_to:
+        try:
+            qs = qs.filter(date__lte=date_to)
+        except Exception:
+            pass
+    if batch_id:
+        qs = qs.filter(batch_id=batch_id)
+    if mode == "auto":
+        qs = qs.filter(auto_calculated=True)
+    elif mode == "manual":
+        qs = qs.filter(auto_calculated=False)
+
+    qs = qs.order_by("-date", "-id")
+
+    # ── Summary stats for filtered results ───────────────────────────────────
+    agg        = qs.aggregate(total_kg=Sum("feed_amount_kg"))
+    total_kg   = round(float(agg["total_kg"] or 0), 2)
+    total_logs = qs.count()
+
+    # ── Pagination ────────────────────────────────────────────────────────────
+    paginator  = Paginator(qs, 25)
+    page_num   = request.GET.get("page", 1)
+    page_obj   = paginator.get_page(page_num)
+
+    # ── Batch dropdown list ───────────────────────────────────────────────────
+    from .models import FishBatch
+    user_batches = FishBatch.objects.filter(pond__owner=request.user).order_by("species", "stocking_date")
+
+    return render(request, "farm/feed_history.html", {
+        "page_obj":     page_obj,
+        "total_kg":     total_kg,
+        "total_logs":   total_logs,
+        "user_batches": user_batches,
+        # keep filter values so form stays filled
+        "f_date_from":  date_from,
+        "f_date_to":    date_to,
+        "f_batch":      batch_id,
+        "f_mode":       mode,
+    })
+
+
+@login_required
 def feed_log_create(request):
     if request.method == "POST":
         form = forms.FeedLogForm(request.POST, user=request.user)
