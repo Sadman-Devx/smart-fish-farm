@@ -29,17 +29,8 @@
     </div>
 
     <div class="fd-header-right">
-      <div class="fd-header-badge" id="fd-badge">AI Expert</div>
 
-      <div class="fd-header-actions">
-        <button class="fd-icon-btn" id="btn-sound"       data-tip="Sound on/off"    onclick="toggleSound()">🔔</button>
-        <button class="fd-icon-btn"                      data-tip="Disease History"  onclick="openHistory()">📋</button>
-        <button class="fd-icon-btn"                      data-tip="Statistics"       onclick="openStats()">📊</button>
-        <button class="fd-icon-btn"                      data-tip="Clear chat"       onclick="clearChat()">🗑️</button>
-        <button class="fd-icon-btn"                      data-tip="Export chat"      onclick="exportChat()">💾</button>
-        <button class="fd-icon-btn" id="btn-fullscreen"  data-tip="Fullscreen"       onclick="toggleFullscreen()">⛶</button>
-      </div>
-
+      <!-- Language selector — leftmost in right group -->
       <div class="fd-lang-wrap">
         <button class="fd-lang-btn" id="fd-lang-btn" onclick="toggleLangMenu()">
           <span id="fd-lang-flag" class="fd-lang-flag">🇧🇩</span>
@@ -51,6 +42,19 @@
           <button class="fd-lang-option"        data-lang="en" onclick="setLanguage('en')">🇬🇧 English</button>
         </div>
       </div>
+
+      <div class="fd-header-badge" id="fd-badge">AI Expert</div>
+
+      <!-- Icon buttons -->
+      <div class="fd-header-actions">
+        <button class="fd-icon-btn" id="btn-sound"      data-tip="Sound on/off"   onclick="toggleSound()">🔔</button>
+        <button class="fd-icon-btn"                     data-tip="Disease History" onclick="openHistory()">📋</button>
+        <button class="fd-icon-btn"                     data-tip="Statistics"      onclick="openStats()">📊</button>
+        <button class="fd-icon-btn"                     data-tip="Clear chat"      onclick="clearChat()">🗑️</button>
+        <button class="fd-icon-btn"                     data-tip="Export chat"     onclick="exportChat()">💾</button>
+        <button class="fd-icon-btn" id="btn-fullscreen" data-tip="Fullscreen"      onclick="toggleFullscreen()">⛶</button>
+      </div>
+
     </div>
   </div>
 
@@ -74,25 +78,58 @@
 
   <!-- ── Chat Messages ──────────────────────────────────────── -->
   <div class="fd-chat" id="fd-chat">
+
+    <!-- Welcome Screen -->
     <div class="fd-welcome" id="fd-welcome">
       <div class="fd-welcome-icon">🐠</div>
       <h3 id="fd-welcome-title">I'm Fish Doctor!</h3>
       <p id="fd-welcome-desc">Ask me about fish diseases, water quality, feeding — anything. Send a photo for the most accurate diagnosis.</p>
+
+      <!-- 2×2 Feature Card Grid -->
       <div class="fd-welcome-features">
-        <span class="fd-feature-tag" id="fd-feat-1">📸 Photo diagnosis</span>
-        <span class="fd-feature-tag" id="fd-feat-2">💬 Conversation</span>
-        <span class="fd-feature-tag" id="fd-feat-3">💊 Treatment advice</span>
-        <span class="fd-feature-tag" id="fd-feat-4">🛡️ Disease prevention</span>
+        <div class="fd-feature-tag" onclick="sendFeature('photo')" id="fd-feat-1">
+          <span class="fd-feature-tag-icon">📷</span>
+          <div class="fd-feature-tag-text">
+            <span class="fd-feature-tag-title">Photo diagnosis</span>
+            <span class="fd-feature-tag-sub">Upload fish photo</span>
+          </div>
+        </div>
+        <div class="fd-feature-tag" onclick="sendFeature('chat')" id="fd-feat-2">
+          <span class="fd-feature-tag-icon">💬</span>
+          <div class="fd-feature-tag-text">
+            <span class="fd-feature-tag-title">Conversation</span>
+            <span class="fd-feature-tag-sub">Ask anything</span>
+          </div>
+        </div>
+        <div class="fd-feature-tag" onclick="sendFeature('treatment')" id="fd-feat-3">
+          <span class="fd-feature-tag-icon">💊</span>
+          <div class="fd-feature-tag-text">
+            <span class="fd-feature-tag-title">Treatment</span>
+            <span class="fd-feature-tag-sub">Medication guide</span>
+          </div>
+        </div>
+        <div class="fd-feature-tag" onclick="sendFeature('prevention')" id="fd-feat-4">
+          <span class="fd-feature-tag-icon">🛡️</span>
+          <div class="fd-feature-tag-text">
+            <span class="fd-feature-tag-title">Prevention</span>
+            <span class="fd-feature-tag-sub">Disease prevention</span>
+          </div>
+        </div>
       </div>
     </div>
-  </div>
+
+  </div><!-- /.fd-chat -->
 
   <!-- ── Quick Suggestions ──────────────────────────────────── -->
-  <div class="fd-suggestions" id="fd-suggestions"></div>
+  <div class="fd-suggestions" id="fd-suggestions">
+    <div class="fd-suggestions-label" id="fd-suggestions-label">Common questions</div>
+  </div>
 
   <!-- ── Input Bar ──────────────────────────────────────────── -->
   <div class="fd-input-bar">
+    <!-- Multi-image preview -->
     <div class="fd-multi-preview" id="fd-multi-preview"></div>
+
     <div class="fd-input-row">
       <div class="fd-input-wrap">
         <textarea
@@ -107,8 +144,10 @@
         <button class="fd-upload-btn" onclick="document.getElementById('fd-file-input').click()"   title="Upload photos">📎</button>
         <button class="fd-upload-btn" onclick="document.getElementById('fd-camera-input').click()" title="Take photo">📷</button>
         <button class="fd-upload-btn" id="fd-voice-btn" onclick="toggleVoice()" title="Voice input">🎙️</button>
+
+        <!-- Send button INSIDE the input wrap -->
+        <button class="fd-send-btn" id="fd-send" onclick="sendMessage()" title="Send">➤</button>
       </div>
-      <button class="fd-send-btn" id="fd-send" onclick="sendMessage()" title="Send">➤</button>
     </div>
   </div>
 
@@ -152,14 +191,15 @@ const LANGS = {
     status: 'অনলাইন — সাহায্যের জন্য প্রস্তুত',
     badge: 'AI বিশেষজ্ঞ',
     welcomeTitle: 'আমি Fish Doctor!',
-    welcomeDesc: 'মাছের রোগ, পানির গুণমান, খাদ্য ব্যবস্থাপনা — যেকোনো বিষয়ে জিজ্ঞেস করো। ছবি দিলে আরো ভালো সাহায্য করতে পারব।',
-    feat1: '📸 ছবি দিয়ে রোগ সনাক্ত', feat2: '💬 স্বাভাবিক কথোপকথন',
-    feat3: '💊 চিকিৎসার পরামর্শ',    feat4: '🛡️ রোগ প্রতিরোধ',
+    welcomeDesc: 'মাছের রোগ, পানির গুণমান, খাদ্য — যেকোনো বিষয়ে জিজ্ঞেস করো। ছবি দিলে আরো ভালো সাহায্য করতে পারব।',
+    feat1Title: 'ছবি দিয়ে রোগ সনাক্ত', feat1Sub: 'মাছের ছবি দিন',
+    feat2Title: 'কথোপকথন',             feat2Sub: 'যেকোনো প্রশ্ন করুন',
+    feat3Title: 'চিকিৎসা',             feat3Sub: 'ওষুধের গাইড',
+    feat4Title: 'রোগ প্রতিরোধ',        feat4Sub: 'প্রতিরোধমূলক ব্যবস্থা',
     placeholder: 'মাছের সমস্যা লিখুন বা ছবি দিন…',
-    imgSelected: 'ছবি নির্বাচিত',
+    suggestionsLabel: 'সাধারণ প্রশ্ন',
     imgSent: '📸 ছবি পাঠানো হয়েছে',
     networkErr: '⚠️ নেটওয়ার্ক সমস্যা। ইন্টারনেট সংযোগ পরীক্ষা করুন।',
-    genericErr: 'কিছু একটা সমস্যা হয়েছে। আবার চেষ্টা করুন।',
     pills: [
       '🐟 মাছ মরে যাচ্ছে কেন?',
       '💧 পানির pH কত থাকা উচিত?',
@@ -167,8 +207,14 @@ const LANGS = {
       '🔴 মাছের গায়ে লাল দাগ',
       '😷 মাছ ভাসছে কেন?',
     ],
+    featurePrompts: {
+      photo:      'আমি মাছের ছবি দিয়ে রোগ সনাক্ত করতে চাই।',
+      chat:       'মাছের রোগ সম্পর্কে কথা বলতে চাই।',
+      treatment:  'মাছের চিকিৎসার পরামর্শ দরকার।',
+      prevention: 'মাছের রোগ প্রতিরোধের উপায় জানতে চাই।',
+    },
     systemLang: 'Bengali (Bangla)',
-    recurringAlert: (name, n) => `⚠️ সতর্কতা: "${name}" রোগটি ${n} বার সনাক্ত হয়েছে! দ্রুত পদক্ষেপ নিন।`,
+    recurringAlert: (name, n) => `⚠️ সতর্কতা: "${name}" রোগটি ${n} বার সনাক্ত হয়েছে!`,
     diseaseRecords: '🦠 রোগের রেকর্ড',
     savedChats: '💬 সংরক্ষিত চ্যাট',
     noDiseaseRecords: 'এখনো কোনো রোগের রেকর্ড নেই।',
@@ -180,13 +226,14 @@ const LANGS = {
     badge: 'AI Expert',
     welcomeTitle: "I'm Fish Doctor!",
     welcomeDesc: 'Ask me about fish diseases, water quality, feeding — anything. Send a photo for the most accurate diagnosis.',
-    feat1: '📸 Photo diagnosis', feat2: '💬 Conversation',
-    feat3: '💊 Treatment advice', feat4: '🛡️ Disease prevention',
+    feat1Title: 'Photo diagnosis', feat1Sub: 'Upload fish photo',
+    feat2Title: 'Conversation',    feat2Sub: 'Ask anything',
+    feat3Title: 'Treatment',       feat3Sub: 'Medication guide',
+    feat4Title: 'Prevention',      feat4Sub: 'Disease prevention',
     placeholder: 'Describe the fish problem or upload a photo…',
-    imgSelected: 'Image selected',
+    suggestionsLabel: 'Common questions',
     imgSent: '📸 Photo sent',
     networkErr: '⚠️ Network error. Please check your internet connection.',
-    genericErr: 'Something went wrong. Please try again.',
     pills: [
       '🐟 Why are my fish dying?',
       '💧 What should the pH level be?',
@@ -194,6 +241,12 @@ const LANGS = {
       '🔴 Red spots on my fish',
       '😷 Why is my fish floating?',
     ],
+    featurePrompts: {
+      photo:      'I want to diagnose a fish disease using a photo.',
+      chat:       'I want to talk about fish diseases.',
+      treatment:  'I need treatment advice for my fish.',
+      prevention: 'I want to know how to prevent fish diseases.',
+    },
     systemLang: 'English',
     recurringAlert: (name, n) => `⚠️ Alert: "${name}" detected ${n} times! Take immediate action.`,
     diseaseRecords: '🦠 Disease Records',
@@ -225,8 +278,6 @@ const OFFLINE_TIPS = {
     "🍽️ দিনে ২–৩ বার অল্প করে খাবার দিন।",
     "🔍 প্রতিদিন মাছের গায়ে দাগ বা অস্বাভাবিক আচরণ দেখুন।",
     "🧹 সপ্তাহে একবার পুকুরের ২০–৩০% পানি বদলান।",
-    "⚡ মাছ ভাসলে বা খাবার না খেলে দ্রুত পানি পরীক্ষা করুন।",
-    "🦠 নতুন মাছ আনলে ৭–১৪ দিন আলাদা রাখুন।",
   ],
   en: [
     "💧 Keep water pH between 6.5–8.5.",
@@ -234,12 +285,9 @@ const OFFLINE_TIPS = {
     "🍽️ Feed 2–3 times daily in small amounts.",
     "🔍 Check fish daily for spots or abnormal behavior.",
     "🧹 Replace 20–30% of pond water weekly.",
-    "⚡ If fish float or stop eating, test water immediately.",
-    "🦠 Quarantine new fish for 7–14 days before adding.",
   ],
 };
 
-// Rate limit messages
 const RATE_LIMIT_MSG = {
   bn: "⏳ AI এখন একটু ব্যস্ত। ৩০ সেকেন্ড পরে আবার চেষ্টা করুন।",
   en: "⏳ AI is a bit busy right now. Please try again in 30 seconds.",
@@ -264,18 +312,35 @@ const fdPage    = document.getElementById('fd-page');
 function setLanguage(lang) {
   currentLang = lang;
   const L = LANGS[lang];
+
   document.getElementById('fd-lang-flag').textContent   = L.flag;
   document.getElementById('fd-lang-label').textContent  = L.label;
   document.getElementById('fd-status-text').textContent = L.status;
   document.getElementById('fd-badge').textContent       = L.badge;
   document.getElementById('fd-welcome-title').textContent = L.welcomeTitle;
   document.getElementById('fd-welcome-desc').textContent  = L.welcomeDesc;
-  document.getElementById('fd-feat-1').textContent = L.feat1;
-  document.getElementById('fd-feat-2').textContent = L.feat2;
-  document.getElementById('fd-feat-3').textContent = L.feat3;
-  document.getElementById('fd-feat-4').textContent = L.feat4;
   textEl.placeholder = L.placeholder;
-  suggestEl.innerHTML = '';
+
+  // Update feature card text
+  const f1 = document.getElementById('fd-feat-1');
+  const f2 = document.getElementById('fd-feat-2');
+  const f3 = document.getElementById('fd-feat-3');
+  const f4 = document.getElementById('fd-feat-4');
+  f1.querySelector('.fd-feature-tag-title').textContent = L.feat1Title;
+  f1.querySelector('.fd-feature-tag-sub').textContent   = L.feat1Sub;
+  f2.querySelector('.fd-feature-tag-title').textContent = L.feat2Title;
+  f2.querySelector('.fd-feature-tag-sub').textContent   = L.feat2Sub;
+  f3.querySelector('.fd-feature-tag-title').textContent = L.feat3Title;
+  f3.querySelector('.fd-feature-tag-sub').textContent   = L.feat3Sub;
+  f4.querySelector('.fd-feature-tag-title').textContent = L.feat4Title;
+  f4.querySelector('.fd-feature-tag-sub').textContent   = L.feat4Sub;
+
+  // Rebuild suggestion pills
+  const labelEl = document.getElementById('fd-suggestions-label');
+  if (labelEl) labelEl.textContent = L.suggestionsLabel;
+
+  // Remove old pills (keep label)
+  suggestEl.querySelectorAll('.fd-pill').forEach(p => p.remove());
   L.pills.forEach(pill => {
     const btn = document.createElement('button');
     btn.className   = 'fd-pill';
@@ -283,10 +348,13 @@ function setLanguage(lang) {
     btn.onclick     = () => sendPill(btn);
     suggestEl.appendChild(btn);
   });
+
   document.querySelectorAll('.fd-lang-option').forEach(b =>
     b.classList.toggle('active', b.dataset.lang === lang)
   );
   closeLangMenu();
+
+  // Reset chat on language change
   if (chatHistory.length > 0) {
     chatHistory = [];
     chatEl.querySelectorAll('.fd-msg').forEach(m => m.remove());
@@ -298,14 +366,30 @@ function setLanguage(lang) {
 function toggleLangMenu() {
   document.getElementById('fd-lang-menu').classList.toggle('open');
 }
-
 function closeLangMenu() {
   document.getElementById('fd-lang-menu').classList.remove('open');
 }
-
 document.addEventListener('click', e => {
   if (!e.target.closest('.fd-lang-wrap')) closeLangMenu();
 });
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// FEATURE CARD CLICK
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function sendFeature(type) {
+  const L = LANGS[currentLang];
+  const prompt = L.featurePrompts[type] || '';
+  if (type === 'photo') {
+    // Open file picker for photo type
+    document.getElementById('fd-camera-input').click();
+    textEl.value = prompt;
+    autoResize(textEl);
+  } else {
+    textEl.value = prompt;
+    autoResize(textEl);
+    textEl.focus();
+  }
+}
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // SPECIES
@@ -322,14 +406,10 @@ function selectSpecies(btn) {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function autoResize(el) {
   el.style.height = 'auto';
-  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  el.style.height = Math.min(el.scrollHeight, 100) + 'px';
 }
-
 function handleKey(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendMessage();
-  }
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -339,18 +419,11 @@ function handleImageSelect(event) {
   const files = Array.from(event.target.files);
   if (!files.length) return;
   const remaining = 4 - selectedImages.length;
-  if (remaining <= 0) {
-    showToast('Maximum 4 images allowed');
-    return;
-  }
+  if (remaining <= 0) { showToast('Maximum 4 images allowed'); return; }
   files.slice(0, remaining).forEach(file => {
     const reader = new FileReader();
     reader.onload = e => {
-      selectedImages.push({
-        dataUrl: e.target.result,
-        type: file.type || 'image/jpeg',
-        name: file.name,
-      });
+      selectedImages.push({ dataUrl: e.target.result, type: file.type || 'image/jpeg', name: file.name });
       renderImagePreviews();
     };
     reader.readAsDataURL(file);
@@ -361,10 +434,7 @@ function handleImageSelect(event) {
 function renderImagePreviews() {
   const container = document.getElementById('fd-multi-preview');
   container.innerHTML = '';
-  if (!selectedImages.length) {
-    container.classList.remove('visible');
-    return;
-  }
+  if (!selectedImages.length) { container.classList.remove('visible'); return; }
   container.classList.add('visible');
   selectedImages.forEach((img, idx) => {
     const item = document.createElement('div');
@@ -384,43 +454,24 @@ function removeImage(idx) {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 async function toggleVoice() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    showToast('Voice not supported in this browser');
-    return;
-  }
+  if (!SpeechRecognition) { showToast('Voice not supported in this browser'); return; }
 
   const host = window.location.hostname;
-  const secureOrigin = window.location.protocol === 'https:'
-    || host === 'localhost'
-    || host === '127.0.0.1'
-    || host === '::1';
-  if (!secureOrigin) {
-    showToast('Voice input requires HTTPS or localhost.');
-    return;
-  }
+  const secureOrigin = window.location.protocol === 'https:' || host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  if (!secureOrigin) { showToast('Voice input requires HTTPS or localhost.'); return; }
 
   if (navigator.permissions) {
     try {
       const micPerm = await navigator.permissions.query({ name: 'microphone' });
-      if (micPerm.state === 'denied') {
-        showToast('Microphone permission denied. Allow it in browser settings.');
-        return;
-      }
+      if (micPerm.state === 'denied') { showToast('Microphone permission denied.'); return; }
     } catch(e) {}
   }
 
-  if (isRecording) {
-    recognition.stop();
-    return;
-  }
+  if (isRecording) { recognition.stop(); return; }
 
   if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-    try {
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch(err) {
-      showToast('Microphone access error: ' + (err.message || 'Not available.'));
-      return;
-    }
+    try { await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch(err) { showToast('Microphone access error: ' + (err.message || 'Not available.')); return; }
   }
 
   recognition = new SpeechRecognition();
@@ -428,53 +479,31 @@ async function toggleVoice() {
   recognition.interimResults = false;
   recognition.continuous     = false;
 
-  recognition.onstart = () => {
-    isRecording = true;
-    voiceBtn.classList.add('recording');
-    voiceBtn.textContent = '⏹️';
-    showToast('Listening…');
-  };
-
-  recognition.onend = () => {
-    isRecording = false;
-    voiceBtn.classList.remove('recording');
-    voiceBtn.textContent = '🎙️';
-  };
-
+  recognition.onstart = () => { isRecording = true; voiceBtn.classList.add('recording'); voiceBtn.textContent = '⏹️'; showToast('Listening…'); };
+  recognition.onend   = () => { isRecording = false; voiceBtn.classList.remove('recording'); voiceBtn.textContent = '🎙️'; };
   recognition.onresult = e => {
     const t = e.results[0][0].transcript;
     textEl.value += (textEl.value ? ' ' : '') + t;
     autoResize(textEl);
   };
-
   recognition.onerror = e => {
     const msgs = {
-      'not-allowed':         'Microphone access denied. Allow it and try again.',
-      'service-not-allowed': 'Microphone access denied by browser.',
-      'network':             'Network issue with voice recognition.',
-      'no-speech':           'No speech detected. Please speak clearly.',
-      'audio-capture':       'Cannot access microphone. Check device settings.',
+      'not-allowed': 'Microphone access denied.', 'no-speech': 'No speech detected.',
+      'network': 'Network issue with voice.', 'audio-capture': 'Cannot access microphone.',
     };
     showToast(msgs[e.error] || 'Voice error: ' + e.error);
-    isRecording = false;
-    voiceBtn.classList.remove('recording');
-    voiceBtn.textContent = '🎙️';
+    isRecording = false; voiceBtn.classList.remove('recording'); voiceBtn.textContent = '🎙️';
   };
 
-  try {
-    recognition.start();
-  } catch(err) {
-    showToast('Voice error: ' + (err.message || 'Failed to start.'));
-    isRecording = false;
-    voiceBtn.classList.remove('recording');
-    voiceBtn.textContent = '🎙️';
-  }
+  try { recognition.start(); }
+  catch(err) { showToast('Voice error: ' + (err.message || 'Failed.')); isRecording = false; voiceBtn.textContent = '🎙️'; }
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // HELPERS
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function sendPill(btn) {
+  // strip the emoji prefix
   textEl.value = btn.textContent.trim().replace(/^\S+\s/, '');
   sendMessage();
 }
@@ -498,11 +527,11 @@ function renderText(text) {
 }
 
 function escapeHtml(str) {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// MESSAGE BUBBLE (array-safe — single ও multiple image দুটোই সাপোর্ট করে)
+// MESSAGE BUBBLE
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function appendMessage(role, text, imgSrcs) {
   hideWelcome();
@@ -544,51 +573,15 @@ function appendMessage(role, text, imgSrcs) {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// TYPING INDICATOR
+// SEVERITY
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-function showTyping() {
-  const wrap = document.createElement('div');
-  wrap.className = 'fd-msg bot';
-  wrap.id        = 'fd-typing-indicator';
-
-  const icon = document.createElement('div');
-  icon.className   = 'fd-msg-icon';
-  icon.textContent = '🐟';
-
-  const dots = document.createElement('div');
-  dots.className = 'fd-typing';
-  dots.innerHTML = '<span></span><span></span><span></span>';
-
-  wrap.appendChild(icon);
-  wrap.appendChild(dots);
-  chatEl.appendChild(wrap);
-  chatEl.scrollTop = chatEl.scrollHeight;
-}
-
-function hideTyping() {
-  const el = document.getElementById('fd-typing-indicator');
-  if (el) el.remove();
-}
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// SEVERITY — local fallback (backend থেকে না আসলে ব্যবহৃত হয়)
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-function detectSeverity(text) {
-  const t = text.toLowerCase();
-  const criticalWords = ['critical','জরুরি','মারা যাচ্ছে','dying','dead','মরে','সংকট','emergency','তীব্র','severe'];
-  const mediumWords   = ['সতর্ক','warning','চিকিৎসা','treatment','মাঝারি','moderate','সমস্যা','problem'];
-  if (criticalWords.some(w => t.includes(w))) return 'critical';
-  if (mediumWords.some(w => t.includes(w)))   return 'medium';
-  return 'low';
-}
-
 function severityBadge(level) {
   const map = { low: '🟢 Low', medium: '🟡 Medium', critical: '🔴 Critical' };
   return `<div class="fd-severity ${level}">${map[level] || '🟢 Low'} severity</div>`;
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// RECURRING ALERT BANNER
+// ALERT BANNER
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function showAlertBanner(disease_name, count) {
   const L  = LANGS[currentLang];
@@ -596,7 +589,6 @@ function showAlertBanner(disease_name, count) {
   document.getElementById('fd-alert-text').textContent = L.recurringAlert(disease_name, count);
   el.style.display = 'flex';
 }
-
 function dismissAlertBanner() {
   document.getElementById('fd-alert-banner').style.display = 'none';
 }
@@ -611,14 +603,14 @@ async function sendMessage() {
   const L    = LANGS[currentLang];
   if (!text && !imgs.length) return;
 
-  // ── Offline check ────────────────────────────────────────
+  // Offline check
   if (!navigator.onLine) {
     const tips   = OFFLINE_TIPS[currentLang] || OFFLINE_TIPS.en;
     const random = tips[Math.floor(Math.random() * tips.length)];
     appendMessage('user', text || L.imgSent, imgs.length ? imgs.map(i => i.dataUrl) : null);
     appendMessage('bot',
       `📡 **${currentLang === 'bn' ? 'ইন্টারনেট সংযোগ নেই' : 'No internet connection'}**\n\n` +
-      `${currentLang === 'bn' ? 'এই মুহূর্তে AI সাহায্য করতে পারছে না। তবে এটা মনে রাখুন:' : 'AI cannot help right now. But remember this tip:'}\n\n${random}`
+      `${currentLang === 'bn' ? 'এই মুহূর্তে AI সাহায্য করতে পারছে না।' : 'AI cannot help right now.'}\n\n${random}`
     );
     playNotif();
     return;
@@ -635,7 +627,7 @@ async function sendMessage() {
   selectedImages = [];
   renderImagePreviews();
 
-  // ── Create streaming bot bubble ──────────────────────────
+  // Streaming bot bubble
   hideWelcome();
   const streamWrap   = document.createElement('div');
   streamWrap.className = 'fd-msg bot';
@@ -663,13 +655,11 @@ async function sendMessage() {
     species:  selectedSpecies,
     history:  chatHistory.slice(0, -1),
   };
-  if (imgs.length) {
-    payload.images = imgs.map(i => ({ data: i.dataUrl, type: i.type }));
-  }
+  if (imgs.length) payload.images = imgs.map(i => ({ data: i.dataUrl, type: i.type }));
 
-  let fullReply    = '';
-  let finalData    = null;
-  let rateLimited  = false;
+  let fullReply   = '';
+  let finalData   = null;
+  let rateLimited = false;
 
   try {
     const res = await fetch("{% url 'farm:fish_doctor_chat_stream' %}", {
@@ -685,7 +675,6 @@ async function sendMessage() {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n\n');
       buffer = lines.pop();
@@ -694,15 +683,12 @@ async function sendMessage() {
         if (!line.startsWith('data: ')) continue;
         const raw = line.slice(6).trim();
         if (!raw) continue;
-
         let event;
         try { event = JSON.parse(raw); } catch { continue; }
 
         if (event.chunk) {
-          // Filter out DISEASE_JSON lines
           if (event.chunk.includes('DISEASE_JSON:')) continue;
           fullReply += event.chunk;
-          // Render markdown incrementally
           streamBubble.innerHTML = renderText(fullReply) + '<span class="fd-cursor">▌</span>';
           chatEl.scrollTop = chatEl.scrollHeight;
         } else if (event.done) {
@@ -715,19 +701,13 @@ async function sendMessage() {
       }
     }
   } catch (err) {
-    if (!navigator.onLine) {
-      fullReply = `📡 **${currentLang === 'bn' ? 'সংযোগ বিচ্ছিন্ন' : 'Connection lost'}**\n\n` +
-        OFFLINE_TIPS[currentLang][0];
-    } else {
-      fullReply = L.networkErr;
-    }
+    fullReply = navigator.onLine ? L.networkErr
+      : `📡 **${currentLang === 'bn' ? 'সংযোগ বিচ্ছিন্ন' : 'Connection lost'}**\n\n` + OFFLINE_TIPS[currentLang][0];
     console.error(err);
   }
 
-  // ── Rate limit ───────────────────────────────────────────
   if (rateLimited) {
     fullReply = RATE_LIMIT_MSG[currentLang] || RATE_LIMIT_MSG.en;
-    // Auto-retry after 30s
     showToast(currentLang === 'bn' ? '৩০ সেকেন্ড পরে আবার চেষ্টা হবে…' : 'Retrying in 30s…');
     setTimeout(() => {
       textEl.value = text;
@@ -737,12 +717,11 @@ async function sendMessage() {
     }, 30000);
   }
 
-  // ── Finalize bubble ──────────────────────────────────────
   let displayReply = fullReply;
   if (finalData && finalData.is_disease && finalData.severity) {
     displayReply = severityBadge(finalData.severity) + fullReply;
   }
-  streamBubble.innerHTML = renderText(displayReply);  // remove cursor
+  streamBubble.innerHTML = renderText(displayReply);
   chatEl.scrollTop = chatEl.scrollHeight;
 
   playNotif();
@@ -754,15 +733,12 @@ async function sendMessage() {
     showAlertBanner(finalData.disease_name, finalData.occurrence_count);
   }
 
-  if (!rateLimited) {
-    isSending = false;
-    sendBtn.disabled = false;
-  }
+  if (!rateLimited) { isSending = false; sendBtn.disabled = false; }
   textEl.focus();
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// DISEASE HISTORY PANEL (database records + localStorage chats)
+// HISTORY PANEL
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 async function openHistory() {
   document.getElementById('fd-history-panel').classList.add('open');
@@ -772,8 +748,6 @@ async function openHistory() {
   listEl.innerHTML = '<div class="fd-history-empty">Loading…</div>';
 
   let html = '';
-
-  // ── Section 1: Database Disease Records ──
   html += `<div class="fd-history-section-title">${L.diseaseRecords}</div>`;
   try {
     const res  = await fetch("{% url 'farm:disease_logs' %}");
@@ -795,12 +769,11 @@ async function openHistory() {
     html += `<div class="fd-history-empty">${L.noDiseaseRecords}</div>`;
   }
 
-  // ── Section 2: localStorage Saved Chat Sessions ──
-  html += `<div class="fd-history-section-title" style="margin-top:14px">${L.savedChats}</div>`;
+  html += `<div class="fd-history-section-title" style="margin-top:12px">${L.savedChats}</div>`;
   const sessions = JSON.parse(localStorage.getItem('fd_sessions') || '[]');
   if (sessions.length) {
     html += sessions.map(s => `
-      <div class="fd-history-item" onclick="loadSession(${s.id})" style="cursor:pointer">
+      <div class="fd-history-item" onclick="loadSession(${s.id})">
         <div class="fd-hi-title">${s.title}…</div>
         <div class="fd-hi-meta">🐟 ${s.species} &nbsp;•&nbsp; ${s.date}</div>
       </div>
@@ -812,26 +785,21 @@ async function openHistory() {
   listEl.innerHTML = html;
 }
 
-// ── Load a saved chat session from localStorage ──
 function loadSession(id) {
   const sessions = JSON.parse(localStorage.getItem('fd_sessions') || '[]');
   const session  = sessions.find(s => s.id === id);
   if (!session) return;
-
   chatHistory = session.history;
   chatEl.querySelectorAll('.fd-msg').forEach(m => m.remove());
   welcomeEl.style.display = 'none';
   suggestEl.style.display = 'none';
-
-  chatHistory.forEach(turn =>
-    appendMessage(turn.role === 'user' ? 'user' : 'bot', turn.content)
-  );
+  chatHistory.forEach(turn => appendMessage(turn.role === 'user' ? 'user' : 'bot', turn.content));
   closePanels();
   showToast('Session loaded');
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// STATISTICS PANEL
+// STATS PANEL
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 async function openStats() {
   document.getElementById('fd-stats-panel').classList.add('open');
@@ -859,11 +827,9 @@ async function openStats() {
       html += '<div class="fd-chart">';
       data.stats.forEach(s => {
         const pct = Math.round((s.count / maxCount) * 100);
-        const col = s.severity === 'critical' ? '#ef4444'
-                  : s.severity === 'medium'   ? '#f59e0b'
-                  : '#10b981';
+        const col = s.severity === 'critical' ? '#ef4444' : s.severity === 'medium' ? '#f59e0b' : '#10b981';
         html += `<div class="fd-chart-row">
-          <div class="fd-chart-label" title="${s.disease_name}">${s.disease_name.slice(0, 22)}</div>
+          <div class="fd-chart-label" title="${s.disease_name}">${s.disease_name.slice(0,22)}</div>
           <div class="fd-chart-bar-wrap"><div class="fd-chart-bar" style="width:${pct}%;background:${col}"></div></div>
           <div class="fd-chart-count">${s.count}</div>
         </div>`;
@@ -872,14 +838,12 @@ async function openStats() {
     } else {
       html += '<div class="fd-history-empty">No disease data yet.</div>';
     }
-
     document.getElementById('fd-stats-body').innerHTML = html;
   } catch(e) {
     document.getElementById('fd-stats-body').innerHTML = '<div class="fd-history-empty">Failed to load statistics.</div>';
   }
 }
 
-// ── Close all slide panels + overlay ──
 function closePanels() {
   document.getElementById('fd-history-panel').classList.remove('open');
   document.getElementById('fd-stats-panel').classList.remove('open');
@@ -887,15 +851,15 @@ function closePanels() {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// LOCALSTORAGE SESSION SAVE
+// SESSION SAVE
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function saveSession() {
   if (!chatHistory.length) return;
   const sessions = JSON.parse(localStorage.getItem('fd_sessions') || '[]');
   sessions.unshift({
-    id:      Date.now(),
-    title:   chatHistory[0]?.content?.slice(0, 50) || 'Chat',
-    date:    new Date().toLocaleString(),
+    id: Date.now(),
+    title: chatHistory[0]?.content?.slice(0, 50) || 'Chat',
+    date: new Date().toLocaleString(),
     species: selectedSpecies,
     history: chatHistory,
   });
@@ -939,13 +903,8 @@ function clearChat() {
 }
 
 function exportChat() {
-  if (!chatHistory.length) {
-    showToast('No chat to export');
-    return;
-  }
-  const lines = chatHistory.map(t =>
-    `[${t.role === 'user' ? 'You' : 'Fish Doctor'}]\n${t.content}\n`
-  );
+  if (!chatHistory.length) { showToast('No chat to export'); return; }
+  const lines = chatHistory.map(t => `[${t.role === 'user' ? 'You' : 'Fish Doctor'}]\n${t.content}\n`);
   const blob = new Blob(
     ['Fish Doctor — Chat Export\n' + new Date().toLocaleString() + '\n\n' + lines.join('\n---\n\n')],
     { type: 'text/plain;charset=utf-8' }
