@@ -183,13 +183,13 @@ CELERY_TIMEZONE   = 'Asia/Dhaka'
 CELERY_ENABLE_UTC = False
 
 CELERY_BEAT_SCHEDULE = {
-    "daily-feed-alert-6am": {
+    "daily-feed-alert-9am": {
         "task":     "farm.tasks.send_daily_feed_alert",
-        "schedule": crontab(hour=6, minute=0),
-    },
-    "auto-log-water-temp-9am": {
-        "task":     "farm.tasks.auto_log_water_temperature",
         "schedule": crontab(hour=9, minute=0),
+    },
+    "auto-log-water-temp-10am": {
+        "task":     "farm.tasks.auto_log_water_temperature",
+        "schedule": crontab(hour=10, minute=0),
     },
     "run-predictive-alerts-hourly": {
         "task":     "farm.tasks.run_predictive_alerts_task",
