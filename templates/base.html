@@ -45,7 +45,65 @@
   <noscript>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   </noscript>
-  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <link rel="stylesheet" href="{% static 'css/styles.min.css' %}">
+
+  {# ── Flatpickr CSS — consistent DD/MM/YYYY date picker across all browsers ── #}
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <style>
+    /* ── Flatpickr theme overrides — matches AquaSmart dark/light theme ── */
+    .flatpickr-calendar {
+      background: var(--surface2, #1a2740);
+      border: 1px solid rgba(0, 229, 180, 0.2);
+      box-shadow: 0 8px 32px rgba(0,0,0,.45);
+      border-radius: 10px;
+      font-family: 'Inter', sans-serif;
+    }
+    .flatpickr-calendar.arrowTop::before,
+    .flatpickr-calendar.arrowTop::after { border-bottom-color: var(--surface2, #1a2740); }
+    .flatpickr-months .flatpickr-month,
+    .flatpickr-weekdays,
+    span.flatpickr-weekday {
+      background: transparent;
+      color: var(--accent, #00e5b4);
+      fill: var(--accent, #00e5b4);
+    }
+    .flatpickr-day {
+      color: var(--text, #e2eaf4);
+      border-radius: 6px;
+    }
+    .flatpickr-day:hover,
+    .flatpickr-day.prevMonthDay:hover,
+    .flatpickr-day.nextMonthDay:hover {
+      background: rgba(0,229,180,.15);
+      border-color: transparent;
+    }
+    .flatpickr-day.selected,
+    .flatpickr-day.selected:hover {
+      background: var(--accent, #00e5b4);
+      border-color: var(--accent, #00e5b4);
+      color: #0a1628;
+      font-weight: 700;
+    }
+    .flatpickr-day.today { border-color: var(--accent2, #00b8ff); }
+    .flatpickr-day.prevMonthDay,
+    .flatpickr-day.nextMonthDay { color: var(--muted, #4a6080); }
+    .numInputWrapper span { border-color: rgba(255,255,255,.1); }
+    .numInputWrapper span svg path { fill: var(--text, #e2eaf4); }
+    /* Light theme */
+    [data-theme="light"] .flatpickr-calendar {
+      background: #ffffff;
+      border-color: rgba(0,184,255,.25);
+    }
+    [data-theme="light"] .flatpickr-calendar.arrowTop::before,
+    [data-theme="light"] .flatpickr-calendar.arrowTop::after { border-bottom-color: #ffffff; }
+    [data-theme="light"] .flatpickr-day { color: #1a2740; }
+    /* Make the altInput look like a normal form input */
+    .flatpickr-input.flatpickr-mobile,
+    input.flatpickr-input[readonly] {
+      background: transparent;
+    }
+  </style>
 
   <style>
     .guest-banner {
@@ -435,6 +493,20 @@ document.addEventListener("DOMContentLoaded", function() {
       localStorage.setItem('theme', 'light');
       themeIcon.textContent = '🌙';
     }
+  });
+});
+</script>
+
+{# ── Flatpickr JS — DD/MM/YYYY date picker, loaded after page content ── #}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr" defer></script>
+<script defer>
+document.addEventListener("DOMContentLoaded", function () {
+  flatpickr(".flatpickr-date", {
+    dateFormat: "Y-m-d",        // value Django receives  →  2025-05-20
+    altInput:   true,           // show a separate visible input to the user
+    altFormat:  "d/m/Y",        // what the user sees     →  20/05/2025
+    allowInput: true,           // allow typing date manually
+    locale: { firstDayOfWeek: 1 },  // week starts Monday
   });
 });
 </script>

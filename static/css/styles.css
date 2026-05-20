@@ -662,18 +662,50 @@ body > main {
   padding: 6px 12px !important;
 }
 
-/* Table column alignment helpers */
+/* ── dashboard-feed-table (Daily Feed & Temperature) ─────────
+   FIX: force horizontal scroll so columns never wrap or break.
+   min-width ensures the table is always wide enough to display
+   all 5 columns cleanly on any screen size.
+   ──────────────────────────────────────────────────────────── */
+.dashboard-feed-table {
+  min-width: 520px;   /* triggers .table-responsive scroll on narrow screens */
+}
+
+/* DATE column — never wrap "4 May 2026" across two lines */
+.dashboard-feed-table th:nth-child(1),
+.dashboard-feed-table td:nth-child(1) {
+  white-space: nowrap;
+  min-width:   88px;
+}
+
+/* Numeric columns — right-aligned, tabular figures, no wrap */
 .dashboard-feed-table th:nth-child(n+2),
 .dashboard-feed-table td:nth-child(n+2) {
   text-align:          right !important;
   font-variant-numeric: tabular-nums;
+  white-space:         nowrap;
+}
+
+/* AVG WATER TEMP column — give it enough room for "30.5 °C ● api" */
+.dashboard-feed-table th:nth-child(5),
+.dashboard-feed-table td:nth-child(5) {
+  min-width:   110px;
+  white-space: nowrap;
+}
+
+/* Temp source badge ("● api / ● sensor") — keep on same line */
+.dashboard-feed-table td:nth-child(5) span {
+  white-space: nowrap;
+  display:     inline;
 }
 
 .dashboard-feed-table .feed-status {
   display:    inline-block;
-  min-width:  58px;
+  min-width:  52px;
   text-align: right;
 }
+
+/* ── /dashboard-feed-table fix ─────────────────────────────── */
 
 .daily-feed-report-table th:nth-child(n+3),
 .daily-feed-report-table td:nth-child(n+3) {
@@ -760,7 +792,7 @@ body > main {
 .harvests-this-month-table th:last-child,
 .harvests-this-month-table td:last-child {
   width:       300px;
-  text-align:  center !important;  /* Bootstrap text-end override */
+  text-align:  center !important;
   white-space: nowrap;
 }
 
@@ -1261,8 +1293,26 @@ select option {
 
   .topbar-title { white-space: normal !important; font-size: 15px; }
 
-  .recent-feed-table td:nth-child(2),
-  .dashboard-feed-table td:nth-child(1) {
+  /* ── dashboard-feed-table mobile ─────────────────────────────
+     FIXED: removed the -webkit-box / line-clamp hack that was
+     breaking date cells. The table already has min-width:520px
+     so .table-responsive provides horizontal scroll instead.
+     ─────────────────────────────────────────────────────────── */
+  .dashboard-feed-table th,
+  .dashboard-feed-table td {
+    font-size:   10px !important;
+    padding:     6px 7px !important;
+    white-space: nowrap !important;
+  }
+
+  /* Tighten up the feed-status badge on small screens */
+  .dashboard-feed-table .feed-status {
+    min-width: 38px;
+    font-size: 9px;
+  }
+
+  /* recent-feed batch column still allows wrapping */
+  .recent-feed-table td:nth-child(2) {
     max-width:           110px;
     overflow:            hidden;
     display:             -webkit-box;
