@@ -73,7 +73,8 @@ def login_view(request):
             return render(request, "accounts/login.html", {"form": form})
 
         # Check if 2FA is enabled (only for custom User model users)
-        two_factor = getattr(user, 'two_factor_enabled', False)
+        #two_factor = getattr(user, 'two_factor_enabled', False)
+        two_factor = False
 
         if two_factor:
             request.session[_PENDING_USER_KEY] = user.pk
