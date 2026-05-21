@@ -360,7 +360,7 @@ def benchmark_feed_calculation(batch) -> BenchmarkResult:
 
 def benchmark_alert_generation(weather_record) -> BenchmarkResult:
     """Benchmark water quality alert generation."""
-    from ..views import _generate_water_alerts
+    from .generate_water_alerts import generate_water_alerts
 
     gc.collect()
     mem_before = _get_memory_mb()
@@ -369,7 +369,7 @@ def benchmark_alert_generation(weather_record) -> BenchmarkResult:
     start = time.perf_counter()
 
     try:
-        _generate_water_alerts(weather_record)
+        generate_water_alerts(weather_record)
         success = True
         error = None
     except Exception as exc:
