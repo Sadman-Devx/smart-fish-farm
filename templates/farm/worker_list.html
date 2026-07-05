@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}Workers{% endblock %}
+{% block nav_workers %}active{% endblock %}
+{% block topbar_title %}Workers{% endblock %}
+{% block topbar_actions %}
+  {% if not is_guest %}
+  <a href="{% url 'farm:worker_create' %}" class="btn btn-accent btn-sm">+ Add Worker</a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="page-header mb-16">
+  <div><p>Track information and monthly salaries of all farm workers.</p></div>
+</div>
+
+<!-- KPI Cards -->
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px">
+  <div class="kpi-card k-blue">
+    <div class="kpi-label">Active Workers</div>
+    <div class="kpi-value">{{ total_workers }}</div>
+    <div class="kpi-meta">Currently employed</div>
+  </div>
+  <div class="kpi-card k-orange">
+    <div class="kpi-label">Total Monthly Salary</div>
+    <div class="kpi-value">Tk {{ total_salary|floatformat:0 }}</div>
+    <div class="kpi-meta">All active workers</div>
+  </div>
+  <div class="kpi-card k-red">
+    <div class="kpi-label">Pending Salary</div>
+    <div class="kpi-value">{{ pending_count }}</div>
+    <div class="kpi-meta">Outstanding for this month</div>
+  </div>
+</div>
+
+<!-- Quick link to salary sheet -->
+<div style="margin-bottom:16px">
+  <a href="{% url 'farm:salary_list' %}" class="btn btn-sm" style="background:var(--accent2);color:#fff">
+    📋 Monthly Salary Sheet
+  </a>
+</div>
+
+<!-- Worker Table -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">All Workers</span>
+    {% if not is_guest %}
+    <a href="{% url 'farm:worker_create' %}" class="btn btn-sm btn-accent">+ Add</a>
+    {% endif %}
+  </div>
+
+  {% if workers %}
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Position</th>
+          <th>Phone</th>
+          <th>Assigned Ponds</th>
+          <th style="text-align:center">Monthly Salary</th>
+          <th>Status</th>
+          <th style="text-align:center">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for w in workers %}
+        <tr>
+          <td>
+            <a href="{% url 'farm:worker_detail' w.pk %}" style="font-weight:600;color:var(--accent)">
+              {{ w.name }}
+            </a>
+          </td>
+          <td class="text-muted fs-sm">{{ w.get_role_display }}</td>
+          <td class="fs-sm">{{ w.phone|default:"—" }}</td>
+          <td class="fs-sm">
+            {% for pond in w.assigned_ponds.all %}
+              <span class="badge" style="background:var(--surface2);padding:2px 8px;border-radius:10px;font-size:11px">
+                {{ pond.name }}
+              </span>
+            {% empty %}—{% endfor %}
+          </td>
+          <td style="text-align:center;font-weight:700;color:var(--accent)">
+            Tk {{ w.monthly_salary|floatformat:0 }}
+          </td>
+          <td>
+            {% if w.status == "active" %}
+              <span style="color:#22c55e;font-size:12px">● Active</span>
+            {% elif w.status == "on_leave" %}
+              <span style="color:#f59e0b;font-size:12px">● On Leave</span>
+            {% else %}
+              <span style="color:#ef4444;font-size:12px">● Inactive</span>
+            {% endif %}
+          </td>
+
+          <!-- ⋯ Action Dropdown -->
+          <td style="text-align:center;position:relative">
+            <div class="action-menu-wrapper" style="position:relative;display:inline-block">
+
+              <button onclick="toggleMenu(this)"
+                      style="background:var(--surface2);border:1px solid var(--border);
+                             color:var(--text);border-radius:6px;padding:4px 12px;
+                             cursor:pointer;font-size:18px;line-height:1;letter-spacing:2px">
+                ⋯
+              </button>
+
+              <div class="action-dropdown"
+                   style="display:none;position:absolute;right:0;top:110%;
+                          background:var(--surface);border:1px solid var(--border);
+                          border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.3);
+                          min-width:150px;z-index:100;overflow:hidden">
+
+                <a href="{% url 'farm:salary_pay' w.pk %}"
+                   style="display:flex;align-items:center;gap:8px;padding:10px 14px;
+                          color:var(--text);text-decoration:none;font-size:13px;
+                          border-bottom:1px solid var(--border)">
+                  💰 <span>Pay Salary</span>
+                </a>
+
+                <a href="{% url 'farm:worker_detail' w.pk %}"
+                   style="display:flex;align-items:center;gap:8px;padding:10px 14px;
+                          color:var(--text);text-decoration:none;font-size:13px;
+                          border-bottom:1px solid var(--border)">
+                  👁 <span>View Details</span>
+                </a>
+
+                <a href="{% url 'farm:worker_update' w.pk %}"
+                   style="display:flex;align-items:center;gap:8px;padding:10px 14px;
+                          color:var(--text);text-decoration:none;font-size:13px;
+                          border-bottom:1px solid var(--border)">
+                  ✏️ <span>Edit</span>
+                </a>
+
+                <a href="{% url 'farm:worker_delete' w.pk %}"
+                   style="display:flex;align-items:center;gap:8px;padding:10px 14px;
+                          color:#ef4444;text-decoration:none;font-size:13px">
+                  🗑️ <span>Delete</span>
+                </a>
+
+              </div>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card-body" style="text-align:center;padding:40px">
+    <p style="font-size:40px;margin-bottom:8px">👷</p>
+    <p class="text-muted">No workers added yet.</p>
+    {% if not is_guest %}
+    <a href="{% url 'farm:worker_create' %}" class="btn btn-accent btn-sm" style="margin-top:12px">
+      + Add First Worker
+    </a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<script>
+function toggleMenu(btn) {
+  // সব অন্য dropdown বন্ধ করো
+  document.querySelectorAll('.action-dropdown').forEach(function(d) {
+    if (d !== btn.nextElementSibling) d.style.display = 'none';
+  });
+  // এটা toggle করো
+  var menu = btn.nextElementSibling;
+  menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+}
+
+// বাইরে click করলে বন্ধ হবে
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.action-menu-wrapper')) {
+    document.querySelectorAll('.action-dropdown').forEach(function(d) {
+      d.style.display = 'none';
+    });
+  }
+});
+</script>
+
+{% endblock %}

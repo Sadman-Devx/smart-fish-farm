@@ -231,6 +231,11 @@
          class="nav-item {% block nav_expenses %}{% endblock %}">
         <span class="nav-icon">💰</span> Expenses
       </a>
+      
+      <a href="{% url 'farm:worker_list' %}"
+         class="nav-item {% block nav_workers %}{% endblock %}">
+        <span class="nav-icon">👷</span> Workers
+      </a>
       <a href="{% url 'farm:profit_loss_report' %}"
          class="nav-item {% block nav_pl %}{% endblock %}">
         <span class="nav-icon">📊</span> Profit &amp; Loss

@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}{{ worker.name }}{% endblock %}
+{% block topbar_title %}{{ worker.name }}{% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'farm:salary_pay' worker.pk %}" class="btn btn-accent btn-sm">💰 Pay Salary</a>
+  <a href="{% url 'farm:worker_update' worker.pk %}" class="btn btn-sm btn-outline">Edit</a>
+  <a href="{% url 'farm:worker_list' %}" class="btn btn-sm btn-outline">← Back</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- Worker Info Card -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+  <div class="card">
+    <div class="card-header"><span class="card-title">Worker Information</span></div>
+    <div class="card-body">
+      <table class="table" style="margin:0">
+        <tr><td class="text-muted fs-sm">Position</td><td>{{ worker.get_role_display }}</td></tr>
+        <tr><td class="text-muted fs-sm">Phone</td><td>{{ worker.phone|default:"—" }}</td></tr>
+        <tr><td class="text-muted fs-sm">NID</td><td>{{ worker.nid|default:"—" }}</td></tr>
+        <tr><td class="text-muted fs-sm">Join Date</td><td>{{ worker.join_date|date:"d M Y" }}</td></tr>
+        <tr><td class="text-muted fs-sm">Status</td>
+          <td>
+            {% if worker.status == "active" %}
+              <span style="color:#22c55e">● Active</span>
+            {% elif worker.status == "on_leave" %}
+              <span style="color:#f59e0b">● On Leave</span>
+            {% else %}
+              <span style="color:#ef4444">● Inactive</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td class="text-muted fs-sm">Monthly Salary</td>
+          <td style="font-weight:700;color:var(--accent)">Tk {{ worker.monthly_salary|floatformat:0 }}</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Assigned Ponds</span></div>
+    <div class="card-body">
+      {% for pond in worker.assigned_ponds.all %}
+        <div style="padding:8px 12px;background:var(--surface2);border-radius:8px;margin-bottom:8px">
+          <span style="font-weight:600">{{ pond.name }}</span>
+          <span class="text-muted fs-sm"> — {{ pond.area_m2 }} m²</span>
+        </div>
+      {% empty %}
+        <p class="text-muted fs-sm">No ponds assigned.</p>
+      {% endfor %}
+
+      <!-- Total paid summary -->
+      <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+        <p class="text-muted fs-sm" style="margin:0">Total Salary Paid</p>
+        <p style="font-size:22px;font-weight:700;color:var(--accent2);margin:0">
+          Tk {{ total_paid|floatformat:0 }}
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Salary Payment History -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Salary History</span>
+    <a href="{% url 'farm:salary_pay' worker.pk %}" class="btn btn-sm btn-accent">+ Pay</a>
+  </div>
+  {% if payments %}
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Month</th>
+          <th class="text-align:center">Amount Paid</th>
+          <th>Payment Date</th>
+          <th>Status</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in payments %}
+        <tr>
+          <td>{{ p.month|date:"F Y" }}</td>
+          <td class="text-align:center fw-bold">Tk {{ p.amount_paid|floatformat:0 }}</td>
+          <td class="text-muted fs-sm">{{ p.paid_on|date:"d M Y"|default:"—" }}</td>
+          <td>
+            {% if p.status == "paid" %}
+              <span style="color:#22c55e;font-size:12px">✅ Paid</span>
+            {% elif p.status == "partial" %}
+              <span style="color:#f59e0b;font-size:12px">⚠️ Partial</span>
+            {% else %}
+              <span style="color:#ef4444;font-size:12px">❌ Pending</span>
+            {% endif %}
+          </td>
+          <td class="text-muted fs-sm">{{ p.notes|default:"—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card-body" style="text-align:center;padding:30px">
+    <p class="text-muted">No salary records available.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

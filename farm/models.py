@@ -572,3 +572,79 @@ class DiseaseAlert(models.Model):
 
     def __str__(self):
         return f"Alert: {self.disease_name} × {self.occurrence_count}"
+
+# ── Worker ───────────────────────────────────────────────────────────────────
+class Worker(models.Model):
+    ROLE_CHOICES = [
+        ("manager",   "Farm Manager"),
+        ("feeder",    "Fish Feeder"),
+        ("guard",     "Security Guard"),
+        ("cleaner",   "Pond Cleaner"),
+        ("technician","Equipment Technician"),
+        ("other",     "Other"),
+    ]
+    STATUS_CHOICES = [
+        ("active",   "Active"),
+        ("inactive", "Inactive"),
+        ("on_leave", "On Leave"),
+    ]
+
+    farm = models.ForeignKey(
+        FarmProfile, on_delete=models.CASCADE,
+        related_name="workers"
+    )
+    assigned_ponds = models.ManyToManyField(
+        Pond, blank=True,
+        related_name="workers",
+        help_text="Which ponds this worker is responsible for (if any)"
+    )
+    name            = models.CharField(max_length=150)
+    phone           = models.CharField(max_length=20, blank=True)
+    nid             = models.CharField(max_length=20, blank=True,
+                          help_text="National ID number")
+    role            = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    status          = models.CharField(max_length=10, choices=STATUS_CHOICES,
+                          default="active")
+    join_date       = models.DateField(default=timezone.now)
+    monthly_salary  = models.DecimalField(max_digits=8, decimal_places=2,
+                          help_text="Monthly salary (BDT)")
+    notes           = models.TextField(blank=True)
+    created_at      = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.get_role_display()})"
+
+
+# ── SalaryPayment ─────────────────────────────────────────────────────────────
+class SalaryPayment(models.Model):
+    STATUS_CHOICES = [
+        ("paid",    "Paid"),
+        ("pending", "Pending"),
+        ("partial", "Partial"),
+    ]
+
+    worker      = models.ForeignKey(Worker, on_delete=models.CASCADE,
+                      related_name="salary_payments")
+    month       = models.DateField(help_text="Payment month (YYYY-MM-01)")
+    amount_paid = models.DecimalField(max_digits=8, decimal_places=2)
+    status      = models.CharField(max_length=10, choices=STATUS_CHOICES,
+                      default="pending")
+    paid_on     = models.DateField(null=True, blank=True)
+    notes       = models.TextField(blank=True)
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-month"]
+        unique_together = ("worker", "month")
+
+    def __str__(self):
+        return f"{self.worker.name} — {self.month:%B %Y} — {self.status}"
+
+    @property
+    def is_overdue(self):
+        """মাস শেষ হয়ে গেছে কিন্তু এখনো pending"""
+        from datetime import date
+        return self.status == "pending" and self.month < date.today().replace(day=1)

@@ -8,7 +8,7 @@ from django.conf import settings
 from django.urls import path
 from django.views.static import serve
 
-from . import views, onboarding_views, ai_agent_views
+from . import views, onboarding_views, ai_agent_views, worker_views
 from .views import offline_view, manifest_view
 
 app_name = "farm"
@@ -86,6 +86,15 @@ urlpatterns = [
     # ── PWA (Progressive Web App) ────────────────────────────────────────────
     path("offline/",      offline_view,   name="pwa_offline"),
     path("manifest.json", manifest_view,  name="pwa_manifest"),
+
+    # ── Worker ────────────────────────────────────────────────────
+    path("workers/", worker_views.worker_list, name="worker_list"),
+    path("workers/add/", worker_views.worker_create, name="worker_create"),
+    path("workers/<int:pk>/", worker_views.worker_detail, name="worker_detail"),
+    path("workers/<int:pk>/edit/", worker_views.worker_update, name="worker_update"),
+    path("workers/<int:pk>/delete/", worker_views.worker_delete, name="worker_delete"),
+    path("workers/<int:pk>/pay/", worker_views.salary_pay, name="salary_pay"),
+    path("salary/", worker_views.salary_list, name="salary_list"),
     
     # Note: In production, serve sw.js via your web server (Nginx/Apache) or collectstatic.
     path('sw.js', serve, {

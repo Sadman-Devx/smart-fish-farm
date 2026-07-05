@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Salary Sheet — {{ this_month|date:"F Y" }}{% endblock %}
+{% block topbar_title %}Salary Sheet — {{ this_month|date:"F Y" }}{% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'farm:worker_list' %}" class="btn btn-sm btn-outline">← Workers</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- KPI -->
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px">
+  <div class="kpi-card k-blue">
+    <div class="kpi-label">Total to be paid</div>
+    <div class="kpi-value">Tk {{ total_payable|floatformat:0 }}</div>
+    <div class="kpi-meta">{{ this_month|date:"F Y" }}</div>
+  </div>
+  <div class="kpi-card k-green">
+    <div class="kpi-label">Total Paid</div>
+    <div class="kpi-value">Tk {{ total_paid|floatformat:0 }}</div>
+    <div class="kpi-meta">Paid this month</div>
+  </div>
+  <div class="kpi-card k-orange">
+    <div class="kpi-label">Pending</div>
+    <div class="kpi-value">Tk {{ total_pending|floatformat:0 }}</div>
+    <div class="kpi-meta">Pending</div>
+  </div>
+</div>
+
+<!-- Salary Table -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">{{ this_month|date:"F Y" }} — Salary list</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Worker</th>
+          <th>Position</th>
+          <th class="text-end">Monthly Salary</th>
+          <th class="text-end">Amount Paid</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in salary_rows %}
+        <tr>
+          <td>
+            <a href="{% url 'farm:worker_detail' row.worker.pk %}"
+               style="font-weight:600;color:var(--accent)">{{ row.worker.name }}</a>
+          </td>
+          <td class="text-muted fs-sm">{{ row.worker.get_role_display }}</td>
+          <td class="text-end">Tk {{ row.worker.monthly_salary|floatformat:0 }}</td>
+          <td class="text-end fw-bold">
+            {% if row.payment %}
+              Tk {{ row.payment.amount_paid|floatformat:0 }}
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            {% if row.is_paid %}
+              <span style="color:#22c55e;font-size:12px">✅ Paid</span>
+            {% elif row.payment and row.payment.status == "partial" %}
+              <span style="color:#f59e0b;font-size:12px">⚠️ Partial</span>
+            {% else %}
+              <span style="color:#ef4444;font-size:12px">❌ Pending</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if not row.is_paid %}
+            <a href="{% url 'farm:salary_pay' row.worker.pk %}"
+               class="btn btn-sm" style="background:var(--accent2);color:#fff;font-size:11px">
+              💰 Pay Now
+            </a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

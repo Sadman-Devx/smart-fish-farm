@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block topbar_title %}{{ title }}{% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'farm:worker_list' %}" class="btn btn-sm btn-outline">← Back</a>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:640px;margin:0 auto">
+  <div class="card-header"><span class="card-title">{{ title }}</span></div>
+  <div class="card-body">
+    <form method="post">
+      {% csrf_token %}
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <!-- Name -->
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Name *</label>
+          {{ form.name }}
+          {% if form.name.errors %}
+            <p style="color:#ef4444;font-size:12px;margin-top:4px">{{ form.name.errors.0 }}</p>
+          {% endif %}
+        </div>
+
+        <!-- Phone -->
+        <div class="form-group">
+          <label class="form-label">Phone Number</label>
+          {{ form.phone }}
+        </div>
+
+        <!-- NID -->
+        <div class="form-group">
+          <label class="form-label">NID Number</label>
+          {{ form.nid }}
+        </div>
+
+        <!-- Role -->
+        <div class="form-group">
+          <label class="form-label">Position *</label>
+          {{ form.role }}
+        </div>
+
+        <!-- Status -->
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          {{ form.status }}
+        </div>
+
+        <!-- Join Date -->
+        <div class="form-group">
+          <label class="form-label">Join Date *</label>
+          {{ form.join_date }}
+        </div>
+
+        <!-- Salary -->
+        <div class="form-group">
+          <label class="form-label">Monthly Salary (BDT) *</label>
+          {{ form.monthly_salary }}
+        </div>
+
+        <!-- Assigned Ponds -->
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Assigned Ponds</label>
+          <div style="display:flex;flex-wrap:wrap;gap:12px;padding:10px;
+                      background:var(--surface2);border-radius:8px">
+            {{ form.assigned_ponds }}
+          </div>
+        </div>
+
+        <!-- Notes -->
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Notes</label>
+          {{ form.notes }}
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:20px">
+        <button type="submit" class="btn btn-accent">{{ btn }}</button>
+        <a href="{% url 'farm:worker_list' %}" class="btn btn-outline">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

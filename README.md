@@ -393,8 +393,8 @@ Powered by **Celery Beat** — runs automatically:
 
 | Schedule | Task |
 |----------|------|
-| 6:00 AM daily | 📧 Daily feed alert email with schedule |
-| 9:00 AM daily | 🌡️ Auto water temperature logging for all ponds |
+| 9:00 AM daily | 📧 Daily feed alert email with schedule |
+| 10:00 AM daily | 🌡️ Auto water temperature logging for all ponds |
 | Every hour | 🔔 Predictive alert generation |
 
 ---

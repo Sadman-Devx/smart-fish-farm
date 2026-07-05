@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="max-width:400px;margin:60px auto;text-align:center">
+  <div class="card-body" style="padding:32px">
+    <p style="font-size:40px">⚠️</p>
+    <h3>Are you sure you want to delete {{ worker.name }}?</h3>
+    <p class="text-muted fs-sm">This will delete all salary records for this worker.</p>
+    <form method="post" style="display:flex;gap:10px;justify-content:center;margin-top:20px">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-accent" style="background:#ef4444">yes, Delete</button>
+      <a href="{% url 'farm:worker_list' %}" class="btn btn-outline">Cancel</a>
+    </form>
+  </div>
+</div>
+{% endblock %}
