@@ -18,6 +18,17 @@ Temperature resolution (highest priority first)
   2. DailyWeather for the exact day     (DB Cache)
   3. Most-recent DailyWeather in DB     (fallback for historical dates)
   4. Hard default: 26°C                 (absolute last resort)
+
+Feed formula
+────────────
+    feed_kg = biomass_kg × feeding_rate_pct(water_temp) / 100
+                          × temperature_factor(ambient_temp)
+                          × size_factor(current_avg_weight_g)
+
+The size_factor was added after a literature-benchmarked simulation
+(research/feed_recommendation_eval/) showed the temperature-only formula
+over-feeds fish once they grow past ~150g (implied FCR ~2.6 vs. a
+literature range of 1.2-2.0). See _size_factor() docstring for details.
 """
 from __future__ import annotations
 
@@ -98,6 +109,49 @@ def _temperature_factor(temp_c: float) -> float:
     if temp_c < 26: return 0.70
     if temp_c <= 30: return 1.00
     return 0.90
+
+
+def _size_factor(avg_weight_g: float) -> float:
+    """
+    Fish-size multiplier applied on top of the temperature-based feeding rate.
+
+    WHY: The FeedingProfile rates (1.5-4.0%) are calibrated for typical
+    grow-out size fish (~50-150g). Aquaculture feeding-rate guidance
+    indicates smaller/younger fish need a much higher feed rate as a
+    percentage of body weight (higher metabolism, faster growth), while
+    fish approaching harvest size need a much lower percentage (slower
+    growth, lower metabolic demand). Without this adjustment, a batch
+    kept at a constant temperature-based rate for its whole grow-out
+    cycle gets over-fed once it grows past ~150g — this was confirmed via
+    literature-benchmarked simulation (see research/feed_recommendation_eval).
+
+    Bands (multiplier on top of the temperature-based rate):
+      < 5g     → 3.75   (fry — very high metabolism)
+      5-20g    → 2.0    (fingerling)
+      20-50g   → 1.25   (juvenile)
+      50-150g  → 1.0    (baseline grow-out — FeedingProfile rates calibrated here)
+      150-300g → 0.5    (approaching harvest)
+      > 300g   → 0.3    (near/at harvest size)
+
+    NOTE: these multipliers are an engineering approximation calibrated
+    against general aquaculture feeding-rate guidance (not a single
+    peer-reviewed table specific to one species/system) — reasonable for
+    this application, but worth refining further with real farm data.
+    """
+    w = _safe_float(avg_weight_g)
+    if w <= 0:
+        return 1.0  # unknown weight — don't distort the recommendation
+    if w < 5:
+        return 3.75
+    if w < 20:
+        return 2.0
+    if w < 50:
+        return 1.25
+    if w < 150:
+        return 1.0
+    if w < 300:
+        return 0.5
+    return 0.3
 
 
 # ── স্তর ১: Auto-Generate Feeding Profiles ───────────────────────────────────
@@ -189,6 +243,16 @@ def smart_feed_kg_for_batch(
     if biomass_kg <= 0:
         return None
 
+    # Current average fish weight, for the size-based feeding adjustment below.
+    # Same fallback pattern used in ml_prediction.py: latest GrowthRecord,
+    # falling back to the batch's stocking weight if no growth history yet.
+    latest_growth = batch.growth_records.order_by("-date").first()
+    current_avg_weight_g = (
+        _safe_float(latest_growth.avg_weight_g)
+        if latest_growth and latest_growth.avg_weight_g is not None
+        else _safe_float(getattr(batch, "initial_avg_weight_g", None))
+    )
+
     # ── Step 1: resolve water & ambient temperature safely ────────────────────
 
     water_temp = 0.0
@@ -248,9 +312,10 @@ def smart_feed_kg_for_batch(
 
     # ── Step 3: calculate ─────────────────────────────────────────────────────
     
-    base_feed   = biomass_kg * feed_rate_pct / 100.0
-    factor      = _temperature_factor(ambient_temp)
-    recommended = round(base_feed * factor, 2)
+    base_feed    = biomass_kg * feed_rate_pct / 100.0
+    temp_factor  = _temperature_factor(ambient_temp)
+    size_factor  = _size_factor(current_avg_weight_g)
+    recommended  = round(base_feed * temp_factor * size_factor, 2)
 
     # Since factor is mathematically always >= 0.10 and biomass > 0, 
     # this will never realistically be <= 0. We just ensure strictly positive.

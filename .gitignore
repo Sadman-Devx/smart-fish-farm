@@ -7,3 +7,6 @@ celerybeat-schedule
 .pytest_cache/
 .mypy_cache/
 staticfiles/
+research/water_quality_ml/*.pkl
+research/disease_diagnosis_eval/test_images/
+research/disease_diagnosis_eval/results/
