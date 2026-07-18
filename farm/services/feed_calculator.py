@@ -228,8 +228,8 @@ def smart_feed_kg_for_batch(
     
     # ✅ স্তর ২: AUTO-FIX (নতুন batch হলে biomass calculate)
     if biomass_kg <= 0:
-        initial_count = _safe_float(batch.initial_stock_count)
-        avg_weight_g = _safe_float(batch.average_weight_g)
+        initial_count = _safe_float(batch.initial_count)
+        avg_weight_g = _safe_float(batch.initial_avg_weight_g)
         
         if initial_count > 0 and avg_weight_g > 0:
             biomass_kg = (initial_count * avg_weight_g) / 1000.0

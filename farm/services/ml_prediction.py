@@ -256,7 +256,7 @@ class MLGrowthPredictor:
         from sklearn.linear_model  import LinearRegression
         from sklearn.preprocessing import StandardScaler
         from sklearn.pipeline      import Pipeline
-        from sklearn.model_selection import cross_val_score
+        from sklearn.model_selection import cross_validate
         import warnings
         warnings.filterwarnings("ignore")
 
@@ -275,15 +275,23 @@ class MLGrowthPredictor:
             "LinearRegression": Pipeline([("scaler", StandardScaler()), ("model", LinearRegression())]),
         }
 
-        best_model, best_name, best_score = None, "", -999.0
+        best_model, best_name, best_score, best_mae = None, "", -999.0, float("inf")
         cv_folds = min(5, max(2, len(y) // 20))
 
         for name, pipeline in candidates.items():
             try:
-                scores = cross_val_score(pipeline, X, y, cv=cv_folds, scoring="r2", n_jobs=-1)
-                mean_score = float(np.mean(scores))
-                if mean_score > best_score:
-                    best_score, best_name, best_model = mean_score, name, pipeline
+                scores = cross_validate(
+                    pipeline, X, y, cv=cv_folds,
+                    scoring=("r2", "neg_mean_absolute_error"), n_jobs=-1,
+                )
+                mean_r2 = float(np.mean(scores["test_r2"]))
+                mean_mae = float(-np.mean(scores["test_neg_mean_absolute_error"]))
+                # Select by lowest MAE (real-world prediction error in grams —
+                # more decision-relevant than R2 alone, which can favor a model
+                # with worse absolute error if its variance-explained happens
+                # to be higher). R2 is still tracked and returned for reporting.
+                if mean_mae < best_mae:
+                    best_mae, best_score, best_name, best_model = mean_mae, mean_r2, name, pipeline
             except Exception as e:
                 logger.warning(f"[ML] {name} CV failed: {e}")
 
@@ -415,8 +423,7 @@ def compare_models_for_paper() -> dict[str, Any]:
     from sklearn.linear_model  import LinearRegression
     from sklearn.preprocessing import StandardScaler
     from sklearn.pipeline      import Pipeline
-    from sklearn.model_selection import cross_val_score, KFold
-    from sklearn.metrics import mean_absolute_error, mean_squared_error
+    from sklearn.model_selection import cross_validate, KFold
     import warnings
     warnings.filterwarnings("ignore")
 
@@ -432,17 +439,27 @@ def compare_models_for_paper() -> dict[str, Any]:
         "Linear Regression": Pipeline([("scaler", StandardScaler()), ("model", LinearRegression())]),
     }
 
-    results, best_name, best_r2 = [], "", -999.0
+    # NOTE: all three metrics (R2, MAE, RMSE) are computed via the SAME 5-fold
+    # cross-validation, i.e. all out-of-sample. Comparing an out-of-sample R2
+    # against an in-sample MAE/RMSE (fit-then-predict-on-training-data) would
+    # be an apples-to-oranges comparison — tree-based models can look
+    # artificially strong in-sample from memorizing training data, which
+    # previously distorted this comparison.
+    results, best_name, best_mae = [], "", float("inf")
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
 
     for name, pipeline in candidates.items():
-        pipeline.fit(X, y)
-        y_pred = pipeline.predict(X)
-        r2   = float(np.mean(cross_val_score(pipeline, X, y, cv=kf, scoring="r2")))
-        mae  = float(mean_absolute_error(y, y_pred))
-        rmse = float(np.sqrt(mean_squared_error(y, y_pred)))
+        scores = cross_validate(
+            pipeline, X, y, cv=kf,
+            scoring=("r2", "neg_mean_absolute_error", "neg_root_mean_squared_error"),
+        )
+        r2   = float(np.mean(scores["test_r2"]))
+        mae  = float(-np.mean(scores["test_neg_mean_absolute_error"]))
+        rmse = float(-np.mean(scores["test_neg_root_mean_squared_error"]))
         results.append({"name": name, "r2": round(r2, 4), "mae": round(mae, 2), "rmse": round(rmse, 2)})
-        if r2 > best_r2: best_r2, best_name = r2, name
+        # Select by lowest (cross-validated) MAE — see note above on why not R2 alone.
+        if mae < best_mae:
+            best_mae, best_name = mae, name
 
     return {
         "models": results, "best_model": best_name,

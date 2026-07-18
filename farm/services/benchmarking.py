@@ -104,7 +104,7 @@ def _remove_outliers_iqr(data: list[float]) -> list[float]:
     """Remove statistical outliers using IQR method for paper accuracy."""
     if len(data) < 4:
         return data
-    q1, q3 = statistics.quantiles(data, n=4)
+    q1, _q2, q3 = statistics.quantiles(data, n=4)
     iqr = q3 - q1
     lower = q1 - 1.5 * iqr
     upper = q3 + 1.5 * iqr
